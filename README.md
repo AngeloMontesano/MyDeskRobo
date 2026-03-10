@@ -1,55 +1,32 @@
-# DeskRobo (ESP32-S3-LCD-1.85)
+# DeskRobo (Waveshare ESP32-S3-LCD-1.85)
 
-DeskRobo is a small desk companion robot with an animated LVGL face on the Waveshare ESP32-S3-LCD-1.85.
+DeskRobo is an ESP32 desk companion with an animated LVGL face, controllable over Web API and BLE.
 
-Current MVP focus:
-- stable display output
-- animated glow eyes with emotions
-- local control via Wi-Fi AP + web UI
-- OTA firmware upload from browser
+This repository contains:
+- firmware (`src/*`) for the board
+- Windows companion agent (`pc_agent/*`) for BLE event forwarding
 
-## Hardware
+## Features
+
+- 360x360 display (ST77916) with animated eye face
+- 16 emotions and temporary eye pair override
+- selectable face styles: `EVE`, `WALLE`, `CLASSIC`
+- web control UI in AP mode (`DeskRobo-Setup`)
+- HTTP API for emotions, events, style, backlight, tuning
+- OTA firmware upload via browser (`/api/ota`)
+- BLE command path (for PC agent)
+- backlight control from web UI (`0..100`)
+
+## Hardware / Software Baseline
 
 - Board: Waveshare ESP32-S3-LCD-1.85
-- Display: ST77916 (360x360)
 - Framework: Arduino (PlatformIO)
-- Upload port (current setup): `COM5`
-
-## Current Status
-
-Working now:
-- dark background + animated eyes
-- blink and idle movement
-- 16 emotions
-- web control page in AP mode
-- HTTP API for emotion/event triggers
-- OTA upload endpoint
-
-Temporarily disabled:
-- gyro-based live reactions (kept off for stability)
-
-## Emotion Set
-
-- `IDLE`
-- `HAPPY`
-- `SAD`
-- `ANGRY`
-- `ANGST`
-- `WOW`
-- `SLEEPY`
-- `LOVE`
-- `CONFUSED`
-- `EXCITED`
-- `ANRUF`
-- `LAUT`
-- `MAIL`
-- `DENKEN`
-- `WINK`
-- `GLITCH`
+- Current upload/monitor port in this repo: `COM5`
+- OS used for development: Windows
 
 ## Quick Start
 
-### 1) Build + Upload
+1. Build + upload:
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'
@@ -58,80 +35,40 @@ chcp 65001 > $null
 & "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run -t upload
 ```
 
-### 2) Connect to DeskRobo AP
-
+2. Connect to AP:
 - SSID: `DeskRobo-Setup`
 - Password: `deskrobo123`
-- Web UI: `http://192.168.4.1/`
 
-## HTTP API
+3. Open:
+- `http://192.168.4.1/`
 
-### Status
+## Main API Endpoints
 
-```http
-GET /api/status
-```
+- `GET /api/status`
+- `POST /api/emotion?name=HAPPY&hold=3500`
+- `POST /api/eyes?left=IDLE&right=WINK&hold=5000`
+- `POST /api/style?name=EVE` (also `WALLE`, `CLASSIC`)
+- `GET /api/backlight`
+- `POST /api/backlight?value=65`
+- `GET /api/tune/get`
+- `POST /api/tune/set?key=blink_interval_ms&value=3200`
+- `POST /api/tune/save`
+- `POST /api/tune/load`
+- `POST /api/event?name=CALL`
+- `POST /api/ota`
 
-Example:
+## Documentation
 
-```text
-emotion=IDLE ax=0.00 ay=0.00 az=0.00
-```
+- User/developer quickstart: [DESKROBO_QUICKSTART.md](DESKROBO_QUICKSTART.md)
+- Technical documentation: [docs/TECHNICAL_DOC.md](docs/TECHNICAL_DOC.md)
+- LLM/Agent implementation guide: [docs/LLM_AGENT_GUIDE.md](docs/LLM_AGENT_GUIDE.md)
+- PC agent details: [pc_agent/README.md](pc_agent/README.md)
 
-### Set emotion
+## Known Constraints
 
-```http
-POST /api/emotion?name=HAPPY&hold=3500
-```
-
-### Trigger event
-
-```http
-POST /api/event?name=CALL
-```
-
-Supported event names:
-- `QUIET`
-- `LOUD`
-- `VERY_LOUD`
-- `TILT`
-- `SHAKE`
-- `CALL`
-- `MAIL`
-- `TEAMS`
-
-Note: `TILT`/`SHAKE` API exists, but gyro event handling is currently disabled in stable mode.
-
-### OTA upload
-
-```http
-POST /api/ota
-```
-
-Use the web page file upload control to send a firmware `.bin`.
-
-## Project Structure
-
-- `src/main.cpp` boot/init and main loop
-- `src/anime_face.*` glow-eye renderer
-- `src/DeskRoboMVP.*` emotion/event state logic
-- `src/DeskRoboWeb.*` AP web server + API + OTA
-- `src/LVGL_Arduino/*` Waveshare display + board support
-- `DESKROBO_QUICKSTART.md` detailed local quickstart
-
-## Stability Notes
-
-- This repository keeps a stable MVP baseline.
-- Gyro is intentionally off in `platformio.ini` (`DESKROBO_ENABLE_GYRO`, `DESKROBO_GYRO_EVENTS` commented) due to prior reboot/blink loops.
-
-## Roadmap
-
-- re-enable gyro safely with robust init + failover
-- Windows companion service (Teams/Outlook/audio -> DeskRobo events)
-- SD-card based assets/themes
-- richer face transitions and animation presets
+- Gyro runtime events are disabled by default for stability (`DESKROBO_ENABLE_GYRO`, `DESKROBO_GYRO_EVENTS` commented in `platformio.ini`).
+- Some LVGL compile warnings from upstream headers are expected and currently non-blocking.
 
 ## License
 
-No license file is set yet.
-Add a `LICENSE` file before publishing publicly.
+No license file is set yet. Add a `LICENSE` file before public release.

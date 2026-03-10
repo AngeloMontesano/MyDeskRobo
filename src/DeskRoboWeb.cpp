@@ -6,6 +6,7 @@
 #include <WiFi.h>
 
 #include "DeskRoboMVP.h"
+#include "LVGL_Arduino/Display_ST77916.h"
 #include "LVGL_Arduino/Gyro_QMI8658.h"
 
 namespace {
@@ -22,7 +23,7 @@ body{margin:0;background:#0a0d14;color:#d8e0ff;font-family:Verdana,Segoe UI,sans
 .wrap{max-width:820px;margin:auto;padding:16px}
 .card{background:#131a2a;border:1px solid #2a3654;border-radius:14px;padding:14px;margin:10px 0}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
-button{background:#1f2a46;color:#dce7ff;border:1px solid #3d4f7d;border-radius:10px;padding:10px}
+button,select{background:#1f2a46;color:#dce7ff;border:1px solid #3d4f7d;border-radius:10px;padding:10px}
 button:active{transform:scale(.98)}
 input{width:100%;background:#0f1526;color:#e4ebff;border:1px solid #31416b;border-radius:10px;padding:10px}
 small{opacity:.8}
@@ -30,6 +31,44 @@ small{opacity:.8}
 <h2>DeskRobo Control</h2>
 <div class=card><div id=state>State: ...</div><small>AP: DeskRobo-Setup / deskrobo123</small></div>
 <div class=card><h3>Emotion</h3><div class=grid id=emo></div></div>
+<div class=card><h3>Eye Style</h3>
+<div class=grid>
+<button onclick="setStyle('EVE')">EVE Cinematic</button>
+<button onclick="setStyle('WALLE')">WALL-E Soft</button>
+<button onclick="setStyle('CLASSIC')">Classic Glow</button>
+</div>
+<small>Style wirkt sofort. Optional mit Save Tune persistent speichern.</small>
+</div>
+<div class=card><h3>Backlight</h3>
+<input id=bl type=range min=0 max=100 step=1 oninput="blv.textContent=this.value+'%'">
+<div style="margin-top:8px" class=grid>
+<button onclick="setBacklight()">Apply Brightness</button>
+</div>
+<small>Aktuell: <span id=blv>--%</span></small>
+</div>
+<div class=card><h3>EVE Eyes (Left/Right)</h3>
+<div class=grid><select id=leftEye></select><select id=rightEye></select></div>
+<div style="margin-top:8px"><button onclick="setEyes()">Apply Eye Pair</button></div>
+</div>
+<div class=card><h3>Idle Tuning (No Reflash)</h3>
+<div class=grid>
+<input id=t_drift_amp_px type=number placeholder="drift_amp_px">
+<input id=t_saccade_amp_px type=number placeholder="saccade_amp_px">
+<input id=t_saccade_min_ms type=number placeholder="saccade_min_ms">
+<input id=t_saccade_max_ms type=number placeholder="saccade_max_ms">
+<input id=t_blink_interval_ms type=number placeholder="blink_interval_ms">
+<input id=t_blink_duration_ms type=number placeholder="blink_duration_ms">
+<input id=t_double_blink_chance_pct type=number placeholder="double_blink_chance_pct">
+<input id=t_glow_pulse_amp type=number placeholder="glow_pulse_amp">
+<input id=t_glow_pulse_period_ms type=number placeholder="glow_pulse_period_ms">
+</div>
+<div style="margin-top:8px" class=grid>
+<button onclick="applyTune()">Apply Tune</button>
+<button onclick="saveTune()">Save Tune</button>
+<button onclick="loadTune()">Load Tune</button>
+</div>
+<div id=tuneState style="margin-top:8px;opacity:.9"></div>
+</div>
 <div class=card><h3>Events</h3>
 <div class=grid>
 <button onclick="evt('CALL')">Incoming Call</button><button onclick="evt('MAIL')">Mail</button>
@@ -42,14 +81,45 @@ small{opacity:.8}
 <script>
 const emos=['IDLE','HAPPY','SAD','ANGRY','ANGST','WOW','SLEEPY','LOVE','CONFUSED','EXCITED','ANRUF','LAUT','MAIL','DENKEN','WINK','GLITCH'];
 const box=document.getElementById('emo');
+const leftSel=document.getElementById('leftEye');
+const rightSel=document.getElementById('rightEye');
 emos.forEach(e=>{const b=document.createElement('button');b.textContent=e;b.onclick=()=>setEmo(e);box.appendChild(b);});
+emos.forEach(e=>{const o1=document.createElement('option');o1.value=e;o1.textContent='Left: '+e;leftSel.appendChild(o1);
+                 const o2=document.createElement('option');o2.value=e;o2.textContent='Right: '+e;rightSel.appendChild(o2);});
+leftSel.value='IDLE';rightSel.value='IDLE';
 async function setEmo(name){await fetch('/api/emotion?name='+name+'&hold=3500',{method:'POST'});refresh();}
+async function setStyle(name){await fetch('/api/style?name='+name,{method:'POST'});refresh();}
+async function setBacklight(){
+ const v=parseInt(document.getElementById('bl').value,10);
+ await fetch('/api/backlight?value='+v,{method:'POST'});
+ await refreshBacklight();
+}
+async function setEyes(){await fetch('/api/eyes?left='+leftSel.value+'&right='+rightSel.value+'&hold=5000',{method:'POST'});refresh();}
 async function evt(name){await fetch('/api/event?name='+name,{method:'POST'});refresh();}
 async function refresh(){const r=await fetch('/api/status');document.getElementById('state').textContent='State: '+await r.text();}
+async function refreshBacklight(){
+ const r=await fetch('/api/backlight');
+ const t=await r.text();
+ const v=parseInt(t,10);
+ if(!Number.isNaN(v)){document.getElementById('bl').value=v;document.getElementById('blv').textContent=v+'%';}
+}
+async function refreshTune(){const r=await fetch('/api/tune/get');const t=await r.json();
+ for(const k of Object.keys(t)){const el=document.getElementById('t_'+k);if(el)el.value=t[k];}}
+async function applyTune(){
+ const keys=['drift_amp_px','saccade_amp_px','saccade_min_ms','saccade_max_ms','blink_interval_ms','blink_duration_ms','double_blink_chance_pct','glow_pulse_amp','glow_pulse_period_ms'];
+ let ok=0;
+ for(const k of keys){const el=document.getElementById('t_'+k);if(!el)continue;
+   const v=parseInt(el.value,10);if(Number.isNaN(v))continue;
+   const r=await fetch('/api/tune/set?key='+k+'&value='+v,{method:'POST'});if(r.ok)ok++;}
+ document.getElementById('tuneState').textContent='Applied '+ok+' params';
+ refresh();
+}
+async function saveTune(){const r=await fetch('/api/tune/save',{method:'POST'});document.getElementById('tuneState').textContent=await r.text();}
+async function loadTune(){const r=await fetch('/api/tune/load',{method:'POST'});document.getElementById('tuneState').textContent=await r.text();await refreshTune();refresh();}
 async function ota(){const fi=document.getElementById('f');if(!fi.files.length)return;
  const fd=new FormData();fd.append('firmware',fi.files[0]);document.getElementById('otaState').textContent='Uploading...';
  const r=await fetch('/api/ota',{method:'POST',body:fd});document.getElementById('otaState').textContent=await r.text();}
-setInterval(refresh,1200);refresh();
+setInterval(refresh,1200);refresh();refreshTune();refreshBacklight();
 </script></body></html>
 )HTML";
 
@@ -116,8 +186,8 @@ void handleRoutes() {
 
   server.on("/api/status", HTTP_GET, []() {
     char buf[180];
-    snprintf(buf, sizeof(buf), "emotion=%s ax=%.2f ay=%.2f az=%.2f",
-             emotionToName(DeskRobo_GetEmotion()), Accel.x, Accel.y, Accel.z);
+    snprintf(buf, sizeof(buf), "emotion=%s style=%s ax=%.2f ay=%.2f az=%.2f",
+             emotionToName(DeskRobo_GetEmotion()), DeskRobo_GetStyleName(), Accel.x, Accel.y, Accel.z);
     server.send(200, "text/plain", buf);
   });
 
@@ -131,6 +201,63 @@ void handleRoutes() {
     }
     DeskRobo_SetEmotion(emotion, hold);
     server.send(200, "text/plain", "ok");
+  });
+
+  server.on("/api/eyes", HTTP_POST, []() {
+    DeskRoboEmotion left;
+    DeskRoboEmotion right;
+    const String left_name = server.arg("left");
+    const String right_name = server.arg("right");
+    const uint32_t hold = server.hasArg("hold") ? server.arg("hold").toInt() : 5000;
+    if (!parseEmotion(left_name, left) || !parseEmotion(right_name, right)) {
+      server.send(400, "text/plain", "invalid eyes");
+      return;
+    }
+    DeskRobo_SetEyePair(left, right, hold);
+    server.send(200, "text/plain", "ok");
+  });
+
+  server.on("/api/style", HTTP_POST, []() {
+    const String name = server.arg("name");
+    if (!DeskRobo_SetStyleByName(name.c_str())) {
+      server.send(400, "text/plain", "invalid style");
+      return;
+    }
+    server.send(200, "text/plain", "ok");
+  });
+
+  server.on("/api/backlight", HTTP_GET, []() {
+    server.send(200, "text/plain", String((int) LCD_Backlight));
+  });
+
+  server.on("/api/backlight", HTTP_POST, []() {
+    const int v = constrain(server.arg("value").toInt(), 0, 100);
+    Set_Backlight((uint8_t) v);
+    server.send(200, "text/plain", String(v));
+  });
+
+  server.on("/api/tune/get", HTTP_GET, []() {
+    server.send(200, "application/json", DeskRobo_GetTuningJson());
+  });
+
+  server.on("/api/tune/set", HTTP_POST, []() {
+    const String key = server.arg("key");
+    const int value = server.arg("value").toInt();
+    if (!DeskRobo_SetTuning(key.c_str(), value)) {
+      server.send(400, "text/plain", "invalid tuning key");
+      return;
+    }
+    server.send(200, "text/plain", "ok");
+  });
+
+  server.on("/api/tune/save", HTTP_POST, []() {
+    const bool ok = DeskRobo_SaveTuning();
+    server.send(ok ? 200 : 500, "text/plain", ok ? "saved" : "save failed");
+  });
+
+  server.on("/api/tune/load", HTTP_POST, []() {
+    const bool ok = DeskRobo_LoadTuning();
+    server.send(ok ? 200 : 500, "text/plain", ok ? "loaded" : "load failed");
   });
 
   server.on("/api/event", HTTP_POST, []() {
@@ -185,4 +312,3 @@ void DeskRoboWeb_Init() {
 void DeskRoboWeb_Loop() {
   server.handleClient();
 }
-

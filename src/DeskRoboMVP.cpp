@@ -1,7 +1,9 @@
 #include "DeskRoboMVP.h"
 
+#include <cstring>
 #include <lvgl.h>
 #include <math.h>
+#include <Preferences.h>
 
 #include "LVGL_Arduino/Gyro_QMI8658.h"
 #include "anime_face.h"
@@ -36,6 +38,10 @@ static lv_obj_t *s_motion_debug = nullptr;
 static DeskRoboEmotion s_current_emotion = DESKROBO_EMOTION_IDLE;
 static uint8_t s_current_priority = 0;
 static uint32_t s_emotion_expiry_ms = 0;
+static bool s_eye_pair_active = false;
+static DeskRoboEmotion s_left_eye_emotion = DESKROBO_EMOTION_IDLE;
+static DeskRoboEmotion s_right_eye_emotion = DESKROBO_EMOTION_IDLE;
+static uint32_t s_eye_pair_expiry_ms = 0;
 
 static uint32_t s_last_sensor_ms = 0;
 static uint32_t s_last_motion_ms = 0;
@@ -45,6 +51,39 @@ static const char *s_last_motion_event = "none";
 
 static int32_t s_audio_baseline = 0;
 static int32_t s_audio_level = 0;
+static Preferences s_prefs;
+static DeskRoboFaceStyle s_face_style = DESKROBO_STYLE_EVE;
+
+static FaceStyle to_face_style(DeskRoboFaceStyle style) {
+  if (style == DESKROBO_STYLE_CLASSIC) return FACE_STYLE_CLASSIC;
+  if (style == DESKROBO_STYLE_WALLE) return FACE_STYLE_WALLE;
+  return FACE_STYLE_EVE_CINEMATIC;
+}
+
+static const char *style_name(DeskRoboFaceStyle style) {
+  if (style == DESKROBO_STYLE_CLASSIC) return "CLASSIC";
+  if (style == DESKROBO_STYLE_WALLE) return "WALLE";
+  return "EVE";
+}
+
+static bool parse_style_name(const char *name, DeskRoboFaceStyle &out) {
+  if (!name) return false;
+  if ((strcmp(name, "CLASSIC") == 0) || (strcmp(name, "classic") == 0)) {
+    out = DESKROBO_STYLE_CLASSIC;
+    return true;
+  }
+  if ((strcmp(name, "EVE") == 0) || (strcmp(name, "eve") == 0) ||
+      (strcmp(name, "EVE_CINEMATIC") == 0) || (strcmp(name, "eve_cinematic") == 0)) {
+    out = DESKROBO_STYLE_EVE;
+    return true;
+  }
+  if ((strcmp(name, "WALLE") == 0) || (strcmp(name, "walle") == 0) ||
+      (strcmp(name, "WALL_E") == 0) || (strcmp(name, "wall_e") == 0)) {
+    out = DESKROBO_STYLE_WALLE;
+    return true;
+  }
+  return false;
+}
 
 static Emotion to_anime(DeskRoboEmotion emotion) {
   switch (emotion) {
@@ -106,15 +145,102 @@ static DeskRoboEventRule event_rule(DeskRoboEventType event_type) {
 }
 
 static void apply_emotion_style() {
-  s_face.setEmotion(to_anime(s_current_emotion));
+  s_face.setStyle(to_face_style(s_face_style));
+  if (s_eye_pair_active) {
+    s_face.setEyePair(to_anime(s_left_eye_emotion), to_anime(s_right_eye_emotion));
+  } else {
+    s_face.clearEyePair();
+    s_face.setEmotion(to_anime(s_current_emotion));
+  }
   lv_label_set_text_fmt(s_status, "DeskRobo: %s", emotion_name(s_current_emotion));
 }
 
 void DeskRobo_SetEmotion(DeskRoboEmotion emotion, uint32_t hold_ms) {
+  s_eye_pair_active = false;
   s_current_emotion = emotion;
   s_current_priority = 100;
   s_emotion_expiry_ms = millis() + hold_ms;
   apply_emotion_style();
+}
+
+void DeskRobo_SetEyePair(DeskRoboEmotion left, DeskRoboEmotion right, uint32_t hold_ms) {
+  s_left_eye_emotion = left;
+  s_right_eye_emotion = right;
+  s_eye_pair_active = true;
+  s_eye_pair_expiry_ms = millis() + hold_ms;
+  s_current_priority = 100;
+  s_emotion_expiry_ms = s_eye_pair_expiry_ms;
+  apply_emotion_style();
+}
+
+bool DeskRobo_SetTuning(const char *key, int value) {
+  const bool ok = s_face.setTuningValue(key, value);
+  if (ok) {
+    apply_emotion_style();
+  }
+  return ok;
+}
+
+String DeskRobo_GetTuningJson() {
+  return s_face.getTuningJson();
+}
+
+bool DeskRobo_SaveTuning() {
+  if (!s_prefs.begin("deskrobo", false)) return false;
+  s_prefs.putInt("face_style", (int) s_face_style);
+  s_prefs.putInt("drift_amp_px", s_face.getTuningValue("drift_amp_px"));
+  s_prefs.putInt("saccade_amp_px", s_face.getTuningValue("saccade_amp_px"));
+  s_prefs.putInt("saccade_min_ms", s_face.getTuningValue("saccade_min_ms"));
+  s_prefs.putInt("saccade_max_ms", s_face.getTuningValue("saccade_max_ms"));
+  s_prefs.putInt("blink_interval", s_face.getTuningValue("blink_interval_ms"));
+  s_prefs.putInt("blink_duration", s_face.getTuningValue("blink_duration_ms"));
+  s_prefs.putInt("dbl_blink_pct", s_face.getTuningValue("double_blink_chance_pct"));
+  s_prefs.putInt("glow_pulse_amp", s_face.getTuningValue("glow_pulse_amp"));
+  s_prefs.putInt("glow_pulse_ms", s_face.getTuningValue("glow_pulse_period_ms"));
+  s_prefs.end();
+  return true;
+}
+
+bool DeskRobo_LoadTuning() {
+  if (!s_prefs.begin("deskrobo", true)) return false;
+  const int face_style = s_prefs.getInt("face_style", (int) DESKROBO_STYLE_EVE);
+  const int drift_amp_px = s_prefs.getInt("drift_amp_px", s_face.getTuningValue("drift_amp_px"));
+  const int saccade_amp_px = s_prefs.getInt("saccade_amp_px", s_face.getTuningValue("saccade_amp_px"));
+  const int saccade_min_ms = s_prefs.getInt("saccade_min_ms", s_face.getTuningValue("saccade_min_ms"));
+  const int saccade_max_ms = s_prefs.getInt("saccade_max_ms", s_face.getTuningValue("saccade_max_ms"));
+  const int blink_interval_ms = s_prefs.getInt("blink_interval", s_face.getTuningValue("blink_interval_ms"));
+  const int blink_duration_ms = s_prefs.getInt("blink_duration", s_face.getTuningValue("blink_duration_ms"));
+  const int double_blink_chance_pct = s_prefs.getInt("dbl_blink_pct", s_face.getTuningValue("double_blink_chance_pct"));
+  const int glow_pulse_amp = s_prefs.getInt("glow_pulse_amp", s_face.getTuningValue("glow_pulse_amp"));
+  const int glow_pulse_period_ms = s_prefs.getInt("glow_pulse_ms", s_face.getTuningValue("glow_pulse_period_ms"));
+  s_prefs.end();
+  if (face_style == (int) DESKROBO_STYLE_CLASSIC) s_face_style = DESKROBO_STYLE_CLASSIC;
+  else if (face_style == (int) DESKROBO_STYLE_WALLE) s_face_style = DESKROBO_STYLE_WALLE;
+  else s_face_style = DESKROBO_STYLE_EVE;
+
+  DeskRobo_SetTuning("drift_amp_px", drift_amp_px);
+  DeskRobo_SetTuning("saccade_amp_px", saccade_amp_px);
+  DeskRobo_SetTuning("saccade_min_ms", saccade_min_ms);
+  DeskRobo_SetTuning("saccade_max_ms", saccade_max_ms);
+  DeskRobo_SetTuning("blink_interval_ms", blink_interval_ms);
+  DeskRobo_SetTuning("blink_duration_ms", blink_duration_ms);
+  DeskRobo_SetTuning("double_blink_chance_pct", double_blink_chance_pct);
+  DeskRobo_SetTuning("glow_pulse_amp", glow_pulse_amp);
+  DeskRobo_SetTuning("glow_pulse_period_ms", glow_pulse_period_ms);
+  apply_emotion_style();
+  return true;
+}
+
+bool DeskRobo_SetStyleByName(const char *name) {
+  DeskRoboFaceStyle new_style;
+  if (!parse_style_name(name, new_style)) return false;
+  s_face_style = new_style;
+  apply_emotion_style();
+  return true;
+}
+
+const char *DeskRobo_GetStyleName() {
+  return style_name(s_face_style);
 }
 
 void DeskRobo_PushEvent(DeskRoboEventType event_type) {
@@ -227,6 +353,7 @@ void DeskRobo_Init() {
   s_current_emotion = DESKROBO_EMOTION_IDLE;
   s_current_priority = 0;
   s_emotion_expiry_ms = 0;
+  DeskRobo_LoadTuning();
   apply_emotion_style();
 }
 
@@ -238,6 +365,7 @@ void DeskRobo_Loop() {
   const uint32_t now = millis();
 
   if ((s_current_priority > 0) && (now > s_emotion_expiry_ms)) {
+    s_eye_pair_active = false;
     s_current_emotion = DESKROBO_EMOTION_IDLE;
     s_current_priority = 0;
     s_emotion_expiry_ms = 0;

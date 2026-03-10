@@ -8,6 +8,7 @@
 
 #include "DeskRoboMVP.h"
 #include "DeskRoboWeb.h"
+#include "DeskRoboBLE.h"
 
 #ifndef DESKROBO_ENABLE_GYRO
 #define DESKROBO_ENABLE_GYRO 0
@@ -35,7 +36,7 @@ void setup() {
   Serial.println("[BOOT] Gyro init skipped");
 #endif
   Backlight_Init();
-  Set_Backlight(100);
+  Set_Backlight(65);
   Serial.println("[BOOT] backlight set");
   LCD_Init();
   Serial.println("[BOOT] LCD init done");
@@ -45,11 +46,14 @@ void setup() {
   Serial.println("[BOOT] DeskRobo MVP ready");
   DeskRoboWeb_Init();
   Serial.println("[BOOT] DeskRobo Web ready");
+  DeskRoboBLE_Init();
+  Serial.println("[BOOT] DeskRobo BLE ready");
 }
 
 void loop() {
   DeskRobo_Loop();
   DeskRoboWeb_Loop();
+  DeskRoboBLE_Loop();
   Lvgl_Loop();
   vTaskDelay(pdMS_TO_TICKS(5));
 }

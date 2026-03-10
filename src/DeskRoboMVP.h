@@ -33,8 +33,21 @@ typedef enum {
   DESKROBO_EVENT_PC_TEAMS,
 } DeskRoboEventType;
 
+typedef enum {
+  DESKROBO_STYLE_CLASSIC = 0,
+  DESKROBO_STYLE_EVE = 1,
+  DESKROBO_STYLE_WALLE = 2,
+} DeskRoboFaceStyle;
+
 void DeskRobo_Init();
 void DeskRobo_Loop();
 void DeskRobo_PushEvent(DeskRoboEventType event_type);
 DeskRoboEmotion DeskRobo_GetEmotion();
 void DeskRobo_SetEmotion(DeskRoboEmotion emotion, uint32_t hold_ms);
+void DeskRobo_SetEyePair(DeskRoboEmotion left, DeskRoboEmotion right, uint32_t hold_ms);
+bool DeskRobo_SetTuning(const char *key, int value);
+String DeskRobo_GetTuningJson();
+bool DeskRobo_SaveTuning();
+bool DeskRobo_LoadTuning();
+bool DeskRobo_SetStyleByName(const char *name);
+const char *DeskRobo_GetStyleName();
