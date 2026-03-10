@@ -1,0 +1,4 @@
+bleak>=0.22.0
+pywin32>=306
+pycaw>=20221227
+aiofiles>=23.0
