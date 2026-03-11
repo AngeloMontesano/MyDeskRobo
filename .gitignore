@@ -68,3 +68,5 @@ desktop.ini
 # ----------------------------
 *.log
 logs/
+
+*ESP32-S3-LCD-1.85-Demo/

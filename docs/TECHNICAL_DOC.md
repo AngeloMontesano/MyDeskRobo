@@ -68,13 +68,14 @@ Supported emotions:
 - `DENKEN`
 - `WINK`
 - `GLITCH`
+- `LOCKED`
+- `WIFI`
 
 ## 3.2 Styles
 
 Supported styles:
 - `EVE`
-- `WALLE`
-- `CLASSIC`
+- `PLAYFUL`
 
 Style is applied in renderer (`AnimeFace::setStyle`) and persisted via Preferences through MVP save/load.
 
@@ -98,7 +99,7 @@ Base: AP mode (`DeskRobo-Setup`) at `http://192.168.4.1/`
 - `GET /api/status`
 - `POST /api/emotion?name=<EMOTION>&hold=<ms>`
 - `POST /api/eyes?left=<EMOTION>&right=<EMOTION>&hold=<ms>`
-- `POST /api/style?name=EVE|WALLE|CLASSIC`
+- `POST /api/style?name=EVE|PLAYFUL`
 - `GET /api/backlight`
 - `POST /api/backlight?value=0..100`
 - `GET /api/tune/get`

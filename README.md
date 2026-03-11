@@ -9,8 +9,8 @@ This repository contains:
 ## Features
 
 - 360x360 display (ST77916) with animated eye face
-- 16 emotions and temporary eye pair override
-- selectable face styles: `EVE`, `WALLE`, `CLASSIC`
+- 18 emotions and temporary eye pair override
+- selectable face styles: `EVE`, `PLAYFUL`
 - web control UI in AP mode (`DeskRobo-Setup`)
 - HTTP API for emotions, events, style, backlight, tuning
 - OTA firmware upload via browser (`/api/ota`)
@@ -47,7 +47,7 @@ chcp 65001 > $null
 - `GET /api/status`
 - `POST /api/emotion?name=HAPPY&hold=3500`
 - `POST /api/eyes?left=IDLE&right=WINK&hold=5000`
-- `POST /api/style?name=EVE` (also `WALLE`, `CLASSIC`)
+- `POST /api/style?name=EVE|PLAYFUL`
 - `GET /api/backlight`
 - `POST /api/backlight?value=65`
 - `GET /api/tune/get`

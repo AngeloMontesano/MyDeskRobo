@@ -76,6 +76,8 @@ Supported `name`:
 - `DENKEN`
 - `WINK`
 - `GLITCH`
+- `LOCKED`
+- `WIFI`
 
 ### Trigger event
 

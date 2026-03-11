@@ -55,31 +55,37 @@ static Preferences s_prefs;
 static DeskRoboFaceStyle s_face_style = DESKROBO_STYLE_EVE;
 
 static FaceStyle to_face_style(DeskRoboFaceStyle style) {
-  if (style == DESKROBO_STYLE_CLASSIC) return FACE_STYLE_CLASSIC;
-  if (style == DESKROBO_STYLE_WALLE) return FACE_STYLE_WALLE;
-  return FACE_STYLE_EVE_CINEMATIC;
+  if (style == DESKROBO_STYLE_ROBO) return FACE_STYLE_ROBO;
+  if (style == DESKROBO_STYLE_PLAYFUL) return FACE_STYLE_PLAYFUL;
+  return FACE_STYLE_EVE;
 }
 
 static const char *style_name(DeskRoboFaceStyle style) {
-  if (style == DESKROBO_STYLE_CLASSIC) return "CLASSIC";
-  if (style == DESKROBO_STYLE_WALLE) return "WALLE";
+  if (style == DESKROBO_STYLE_ROBO) return "ROBO_TEST";
+  if (style == DESKROBO_STYLE_PLAYFUL) return "ESP32_EYES";
   return "EVE";
 }
 
 static bool parse_style_name(const char *name, DeskRoboFaceStyle &out) {
   if (!name) return false;
-  if ((strcmp(name, "CLASSIC") == 0) || (strcmp(name, "classic") == 0)) {
-    out = DESKROBO_STYLE_CLASSIC;
+  if ((strcmp(name, "PLAYFUL") == 0) || (strcmp(name, "playful") == 0) ||
+      (strcmp(name, "ESP32") == 0) || (strcmp(name, "esp32") == 0) ||
+      (strcmp(name, "ESP32_EYES") == 0) || (strcmp(name, "esp32_eyes") == 0) ||
+      (strcmp(name, "CLASSIC") == 0) || (strcmp(name, "classic") == 0) ||
+      (strcmp(name, "WALLE") == 0) || (strcmp(name, "walle") == 0) ||
+      (strcmp(name, "WALL_E") == 0) || (strcmp(name, "wall_e") == 0)) {
+    out = DESKROBO_STYLE_PLAYFUL;
+    return true;
+  }
+  if ((strcmp(name, "ROBO") == 0) || (strcmp(name, "robo") == 0) ||
+      (strcmp(name, "ROBO_TEST") == 0) || (strcmp(name, "robo_test") == 0) ||
+      (strcmp(name, "ROBOEYES") == 0) || (strcmp(name, "roboeyes") == 0)) {
+    out = DESKROBO_STYLE_ROBO;
     return true;
   }
   if ((strcmp(name, "EVE") == 0) || (strcmp(name, "eve") == 0) ||
       (strcmp(name, "EVE_CINEMATIC") == 0) || (strcmp(name, "eve_cinematic") == 0)) {
     out = DESKROBO_STYLE_EVE;
-    return true;
-  }
-  if ((strcmp(name, "WALLE") == 0) || (strcmp(name, "walle") == 0) ||
-      (strcmp(name, "WALL_E") == 0) || (strcmp(name, "wall_e") == 0)) {
-    out = DESKROBO_STYLE_WALLE;
     return true;
   }
   return false;
@@ -102,6 +108,23 @@ static Emotion to_anime(DeskRoboEmotion emotion) {
     case DESKROBO_EMOTION_DENKEN: return EMOTION_DENKEN;
     case DESKROBO_EMOTION_WINK: return EMOTION_WINK;
     case DESKROBO_EMOTION_GLITCH: return EMOTION_GLITCH;
+    case DESKROBO_EMOTION_LOCKED: return EMOTION_LOCKED;
+    case DESKROBO_EMOTION_WIFI: return EMOTION_WIFI;
+    case DESKROBO_EMOTION_ESP_NORMAL: return EMOTION_ESP_NORMAL;
+    case DESKROBO_EMOTION_ESP_TIRED: return EMOTION_ESP_TIRED;
+    case DESKROBO_EMOTION_ESP_GLEE: return EMOTION_ESP_GLEE;
+    case DESKROBO_EMOTION_ESP_WORRIED: return EMOTION_ESP_WORRIED;
+    case DESKROBO_EMOTION_ESP_FOCUSED: return EMOTION_ESP_FOCUSED;
+    case DESKROBO_EMOTION_ESP_ANNOYED: return EMOTION_ESP_ANNOYED;
+    case DESKROBO_EMOTION_ESP_SURPRISED: return EMOTION_ESP_SURPRISED;
+    case DESKROBO_EMOTION_ESP_SKEPTIC: return EMOTION_ESP_SKEPTIC;
+    case DESKROBO_EMOTION_ESP_FRUSTRATED: return EMOTION_ESP_FRUSTRATED;
+    case DESKROBO_EMOTION_ESP_UNIMPRESSED: return EMOTION_ESP_UNIMPRESSED;
+    case DESKROBO_EMOTION_ESP_SUSPICIOUS: return EMOTION_ESP_SUSPICIOUS;
+    case DESKROBO_EMOTION_ESP_SQUINT: return EMOTION_ESP_SQUINT;
+    case DESKROBO_EMOTION_ESP_FURIOUS: return EMOTION_ESP_FURIOUS;
+    case DESKROBO_EMOTION_ESP_SCARED: return EMOTION_ESP_SCARED;
+    case DESKROBO_EMOTION_ESP_AWE: return EMOTION_ESP_AWE;
     case DESKROBO_EMOTION_IDLE:
     default: return EMOTION_IDLE;
   }
@@ -124,6 +147,23 @@ static const char *emotion_name(DeskRoboEmotion emotion) {
     case DESKROBO_EMOTION_DENKEN: return "DENKEN";
     case DESKROBO_EMOTION_WINK: return "WINK";
     case DESKROBO_EMOTION_GLITCH: return "GLITCH";
+    case DESKROBO_EMOTION_LOCKED: return "LOCKED";
+    case DESKROBO_EMOTION_WIFI: return "WIFI";
+    case DESKROBO_EMOTION_ESP_NORMAL: return "NORMAL";
+    case DESKROBO_EMOTION_ESP_TIRED: return "TIRED";
+    case DESKROBO_EMOTION_ESP_GLEE: return "GLEE";
+    case DESKROBO_EMOTION_ESP_WORRIED: return "WORRIED";
+    case DESKROBO_EMOTION_ESP_FOCUSED: return "FOCUSED";
+    case DESKROBO_EMOTION_ESP_ANNOYED: return "ANNOYED";
+    case DESKROBO_EMOTION_ESP_SURPRISED: return "SURPRISED";
+    case DESKROBO_EMOTION_ESP_SKEPTIC: return "SKEPTIC";
+    case DESKROBO_EMOTION_ESP_FRUSTRATED: return "FRUSTRATED";
+    case DESKROBO_EMOTION_ESP_UNIMPRESSED: return "UNIMPRESSED";
+    case DESKROBO_EMOTION_ESP_SUSPICIOUS: return "SUSPICIOUS";
+    case DESKROBO_EMOTION_ESP_SQUINT: return "SQUINT";
+    case DESKROBO_EMOTION_ESP_FURIOUS: return "FURIOUS";
+    case DESKROBO_EMOTION_ESP_SCARED: return "SCARED";
+    case DESKROBO_EMOTION_ESP_AWE: return "AWE";
     case DESKROBO_EMOTION_IDLE:
     default: return "IDLE";
   }
@@ -214,8 +254,9 @@ bool DeskRobo_LoadTuning() {
   const int glow_pulse_amp = s_prefs.getInt("glow_pulse_amp", s_face.getTuningValue("glow_pulse_amp"));
   const int glow_pulse_period_ms = s_prefs.getInt("glow_pulse_ms", s_face.getTuningValue("glow_pulse_period_ms"));
   s_prefs.end();
-  if (face_style == (int) DESKROBO_STYLE_CLASSIC) s_face_style = DESKROBO_STYLE_CLASSIC;
-  else if (face_style == (int) DESKROBO_STYLE_WALLE) s_face_style = DESKROBO_STYLE_WALLE;
+  if (face_style == (int) DESKROBO_STYLE_ROBO) s_face_style = DESKROBO_STYLE_ROBO;
+  else if (face_style == 1 || face_style == (int) DESKROBO_STYLE_EVE) s_face_style = DESKROBO_STYLE_EVE;
+  else if (face_style == 0 || face_style == 2 || face_style == (int) DESKROBO_STYLE_PLAYFUL) s_face_style = DESKROBO_STYLE_PLAYFUL;
   else s_face_style = DESKROBO_STYLE_EVE;
 
   DeskRobo_SetTuning("drift_amp_px", drift_amp_px);
@@ -279,8 +320,17 @@ static void read_audio_sensor() {
 
 static void read_motion_sensor() {
 #if DESKROBO_ENABLE_GYRO
+  if (!QMI8658_IsReady()) {
+    if (s_motion_debug) {
+      lv_label_set_text(s_motion_debug, "gyro not detected");
+    }
+    return;
+  }
   QMI8658_Loop();
   if (!isfinite(Accel.x) || !isfinite(Accel.y) || !isfinite(Accel.z)) {
+    if (s_motion_debug) {
+      lv_label_set_text(s_motion_debug, "gyro invalid sample");
+    }
     return;
   }
   const float abs_x = fabsf(Accel.x);

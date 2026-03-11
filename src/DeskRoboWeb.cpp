@@ -6,14 +6,16 @@
 #include <WiFi.h>
 
 #include "DeskRoboMVP.h"
+#include "DeskRoboAudio.h"
 #include "LVGL_Arduino/Display_ST77916.h"
 #include "LVGL_Arduino/Gyro_QMI8658.h"
+#include "LVGL_Arduino/BAT_Driver.h"
+#include "LVGL_Arduino/SD_Card.h"
 
 namespace {
 WebServer server(80);
 
 const char *kApSsid = "DeskRobo-Setup";
-const char *kApPass = "deskrobo123";
 
 const char kIndexHtml[] PROGMEM = R"HTML(
 <!doctype html><html><head><meta name=viewport content="width=device-width,initial-scale=1">
@@ -29,13 +31,13 @@ input{width:100%;background:#0f1526;color:#e4ebff;border:1px solid #31416b;borde
 small{opacity:.8}
 </style></head><body><div class=wrap>
 <h2>DeskRobo Control</h2>
-<div class=card><div id=state>State: ...</div><small>AP: DeskRobo-Setup / deskrobo123</small></div>
+<div class=card><div id=state>State: ...</div><small>AP: DeskRobo-Setup (open, no password)</small></div>
 <div class=card><h3>Emotion</h3><div class=grid id=emo></div></div>
 <div class=card><h3>Eye Style</h3>
 <div class=grid>
-<button onclick="setStyle('EVE')">EVE Cinematic</button>
-<button onclick="setStyle('WALLE')">WALL-E Soft</button>
-<button onclick="setStyle('CLASSIC')">Classic Glow</button>
+<button onclick="setStyle('EVE')">EVE (WALL-E)</button>
+<button onclick="setStyle('ESP32_EYES')">ESP32 Eyes</button>
+<button onclick="setStyle('ROBO_TEST')">RoboEyes Test</button>
 </div>
 <small>Style wirkt sofort. Optional mit Save Tune persistent speichern.</small>
 </div>
@@ -45,6 +47,18 @@ small{opacity:.8}
 <button onclick="setBacklight()">Apply Brightness</button>
 </div>
 <small>Aktuell: <span id=blv>--%</span></small>
+</div>
+<div class=card><h3>Audio Test</h3>
+<div id=audioState>audio: ...</div>
+<div style="margin-top:8px" class=grid>
+<button onclick="beep(880,120)">Beep Leise</button>
+<button onclick="beep(660,200)">Beep Mittel</button>
+</div>
+<div style="margin-top:8px" class=grid>
+<input id=beepLvl type=range min=200 max=4000 step=50 oninput="beepLvlTxt.textContent=this.value">
+<button onclick="setBeepLevel()">Set Beep Level</button>
+</div>
+<small>Beep-Level: <span id=beepLvlTxt>1600</span></small>
 </div>
 <div class=card><h3>EVE Eyes (Left/Right)</h3>
 <div class=grid><select id=leftEye></select><select id=rightEye></select></div>
@@ -79,7 +93,8 @@ small{opacity:.8}
 <div class=card><h3>OTA</h3><input type=file id=f><button onclick=ota()>Upload Firmware</button><div id=otaState></div></div>
 </div>
 <script>
-const emos=['IDLE','HAPPY','SAD','ANGRY','ANGST','WOW','SLEEPY','LOVE','CONFUSED','EXCITED','ANRUF','LAUT','MAIL','DENKEN','WINK','GLITCH'];
+const emos=['IDLE','HAPPY','SAD','ANGRY','ANGST','WOW','SLEEPY','LOVE','CONFUSED','EXCITED','ANRUF','LAUT','MAIL','DENKEN','WINK','GLITCH','LOCKED','WIFI',
+'NORMAL','TIRED','GLEE','WORRIED','FOCUSED','ANNOYED','SURPRISED','SKEPTIC','FRUSTRATED','UNIMPRESSED','SUSPICIOUS','SQUINT','FURIOUS','SCARED','AWE'];
 const box=document.getElementById('emo');
 const leftSel=document.getElementById('leftEye');
 const rightSel=document.getElementById('rightEye');
@@ -103,6 +118,20 @@ async function refreshBacklight(){
  const v=parseInt(t,10);
  if(!Number.isNaN(v)){document.getElementById('bl').value=v;document.getElementById('blv').textContent=v+'%';}
 }
+async function refreshAudio(){
+ const r=await fetch('/api/audio');
+ const a=await r.json();
+ document.getElementById('audioState').textContent='mic_ok='+a.mic_ok+' spk_ok='+a.speaker_ok+' rms='+a.rms.toFixed(4)+' peak='+a.peak.toFixed(4);
+}
+async function beep(hz,ms){
+ await fetch('/api/audio/beep?hz='+hz+'&ms='+ms,{method:'POST'});
+ await refreshAudio();
+}
+async function setBeepLevel(){
+ const v=parseInt(document.getElementById('beepLvl').value,10);
+ await fetch('/api/audio/level?value='+v,{method:'POST'});
+ await refreshAudio();
+}
 async function refreshTune(){const r=await fetch('/api/tune/get');const t=await r.json();
  for(const k of Object.keys(t)){const el=document.getElementById('t_'+k);if(el)el.value=t[k];}}
 async function applyTune(){
@@ -119,7 +148,7 @@ async function loadTune(){const r=await fetch('/api/tune/load',{method:'POST'});
 async function ota(){const fi=document.getElementById('f');if(!fi.files.length)return;
  const fd=new FormData();fd.append('firmware',fi.files[0]);document.getElementById('otaState').textContent='Uploading...';
  const r=await fetch('/api/ota',{method:'POST',body:fd});document.getElementById('otaState').textContent=await r.text();}
-setInterval(refresh,1200);refresh();refreshTune();refreshBacklight();
+setInterval(refresh,1200);refresh();refreshTune();refreshBacklight();refreshAudio();
 </script></body></html>
 )HTML";
 
@@ -140,6 +169,23 @@ bool parseEmotion(const String &name, DeskRoboEmotion &out) {
   else if (name == "DENKEN") out = DESKROBO_EMOTION_DENKEN;
   else if (name == "WINK") out = DESKROBO_EMOTION_WINK;
   else if (name == "GLITCH") out = DESKROBO_EMOTION_GLITCH;
+  else if (name == "LOCKED") out = DESKROBO_EMOTION_LOCKED;
+  else if (name == "WIFI") out = DESKROBO_EMOTION_WIFI;
+  else if (name == "NORMAL") out = DESKROBO_EMOTION_ESP_NORMAL;
+  else if (name == "TIRED") out = DESKROBO_EMOTION_ESP_TIRED;
+  else if (name == "GLEE") out = DESKROBO_EMOTION_ESP_GLEE;
+  else if (name == "WORRIED") out = DESKROBO_EMOTION_ESP_WORRIED;
+  else if (name == "FOCUSED") out = DESKROBO_EMOTION_ESP_FOCUSED;
+  else if (name == "ANNOYED") out = DESKROBO_EMOTION_ESP_ANNOYED;
+  else if (name == "SURPRISED") out = DESKROBO_EMOTION_ESP_SURPRISED;
+  else if (name == "SKEPTIC") out = DESKROBO_EMOTION_ESP_SKEPTIC;
+  else if (name == "FRUSTRATED") out = DESKROBO_EMOTION_ESP_FRUSTRATED;
+  else if (name == "UNIMPRESSED") out = DESKROBO_EMOTION_ESP_UNIMPRESSED;
+  else if (name == "SUSPICIOUS") out = DESKROBO_EMOTION_ESP_SUSPICIOUS;
+  else if (name == "SQUINT") out = DESKROBO_EMOTION_ESP_SQUINT;
+  else if (name == "FURIOUS") out = DESKROBO_EMOTION_ESP_FURIOUS;
+  else if (name == "SCARED") out = DESKROBO_EMOTION_ESP_SCARED;
+  else if (name == "AWE") out = DESKROBO_EMOTION_ESP_AWE;
   else return false;
   return true;
 }
@@ -174,6 +220,23 @@ const char *emotionToName(DeskRoboEmotion e) {
     case DESKROBO_EMOTION_DENKEN: return "DENKEN";
     case DESKROBO_EMOTION_WINK: return "WINK";
     case DESKROBO_EMOTION_GLITCH: return "GLITCH";
+    case DESKROBO_EMOTION_LOCKED: return "LOCKED";
+    case DESKROBO_EMOTION_WIFI: return "WIFI";
+    case DESKROBO_EMOTION_ESP_NORMAL: return "NORMAL";
+    case DESKROBO_EMOTION_ESP_TIRED: return "TIRED";
+    case DESKROBO_EMOTION_ESP_GLEE: return "GLEE";
+    case DESKROBO_EMOTION_ESP_WORRIED: return "WORRIED";
+    case DESKROBO_EMOTION_ESP_FOCUSED: return "FOCUSED";
+    case DESKROBO_EMOTION_ESP_ANNOYED: return "ANNOYED";
+    case DESKROBO_EMOTION_ESP_SURPRISED: return "SURPRISED";
+    case DESKROBO_EMOTION_ESP_SKEPTIC: return "SKEPTIC";
+    case DESKROBO_EMOTION_ESP_FRUSTRATED: return "FRUSTRATED";
+    case DESKROBO_EMOTION_ESP_UNIMPRESSED: return "UNIMPRESSED";
+    case DESKROBO_EMOTION_ESP_SUSPICIOUS: return "SUSPICIOUS";
+    case DESKROBO_EMOTION_ESP_SQUINT: return "SQUINT";
+    case DESKROBO_EMOTION_ESP_FURIOUS: return "FURIOUS";
+    case DESKROBO_EMOTION_ESP_SCARED: return "SCARED";
+    case DESKROBO_EMOTION_ESP_AWE: return "AWE";
     case DESKROBO_EMOTION_IDLE:
     default: return "IDLE";
   }
@@ -185,10 +248,22 @@ void handleRoutes() {
   });
 
   server.on("/api/status", HTTP_GET, []() {
-    char buf[180];
-    snprintf(buf, sizeof(buf), "emotion=%s style=%s ax=%.2f ay=%.2f az=%.2f",
-             emotionToName(DeskRobo_GetEmotion()), DeskRobo_GetStyleName(), Accel.x, Accel.y, Accel.z);
+    const float bat_v = BAT_Get_Volts();
+    char buf[256];
+    snprintf(buf, sizeof(buf), "emotion=%s style=%s bat=%.2fV sd=%uMB flash=%uMB gyro=%s ax=%.2f ay=%.2f az=%.2f",
+             emotionToName(DeskRobo_GetEmotion()), DeskRobo_GetStyleName(),
+             bat_v, SDCard_Size, Flash_Size, QMI8658_IsReady() ? "on" : "off", Accel.x, Accel.y, Accel.z);
     server.send(200, "text/plain", buf);
+  });
+
+  server.on("/api/hw", HTTP_GET, []() {
+    const float bat_v = BAT_Get_Volts();
+    char buf[220];
+    snprintf(buf, sizeof(buf),
+             "{\"bat_v\":%.3f,\"sd_mb\":%u,\"flash_mb\":%u,\"sd_present\":%s,\"gyro_ready\":%s}",
+             bat_v, SDCard_Size, Flash_Size, (SDCard_Size > 0) ? "true" : "false",
+             QMI8658_IsReady() ? "true" : "false");
+    server.send(200, "application/json", buf);
   });
 
   server.on("/api/emotion", HTTP_POST, []() {
@@ -233,6 +308,29 @@ void handleRoutes() {
   server.on("/api/backlight", HTTP_POST, []() {
     const int v = constrain(server.arg("value").toInt(), 0, 100);
     Set_Backlight((uint8_t) v);
+    server.send(200, "text/plain", String(v));
+  });
+
+  server.on("/api/audio", HTTP_GET, []() {
+    char buf[180];
+    snprintf(buf, sizeof(buf),
+             "{\"mic_ok\":%s,\"speaker_ok\":%s,\"rms\":%.6f,\"peak\":%.6f}",
+             DeskRoboAudio_MicReady() ? "true" : "false",
+             DeskRoboAudio_SpeakerReady() ? "true" : "false",
+             DeskRoboAudio_MicRms(), DeskRoboAudio_MicPeak());
+    server.send(200, "application/json", buf);
+  });
+
+  server.on("/api/audio/beep", HTTP_POST, []() {
+    const uint16_t hz = (uint16_t) constrain(server.arg("hz").toInt(), 80, 4000);
+    const uint16_t ms = (uint16_t) constrain(server.arg("ms").toInt(), 20, 1200);
+    const bool ok = DeskRoboAudio_Beep(hz, ms);
+    server.send(ok ? 200 : 500, "text/plain", ok ? "ok" : "speaker not ready");
+  });
+
+  server.on("/api/audio/level", HTTP_POST, []() {
+    const uint16_t v = (uint16_t) constrain(server.arg("value").toInt(), 200, 8000);
+    DeskRoboAudio_SetBeepLevel(v);
     server.send(200, "text/plain", String(v));
   });
 
@@ -301,7 +399,7 @@ void handleRoutes() {
 void DeskRoboWeb_Init() {
   WiFi.mode(WIFI_AP);
   WiFi.setSleep(false);
-  WiFi.softAP(kApSsid, kApPass);
+  WiFi.softAP(kApSsid);
   Serial.printf("[WEB] AP started: %s IP=%s\n", kApSsid, WiFi.softAPIP().toString().c_str());
 
   handleRoutes();

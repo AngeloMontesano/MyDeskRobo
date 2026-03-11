@@ -78,7 +78,7 @@ chcp 65001 > $null
 
 - `POST /api/emotion?name=<EMOTION>&hold=<ms>`
 - `POST /api/eyes?left=<EMOTION>&right=<EMOTION>&hold=<ms>`
-- `POST /api/style?name=EVE|WALLE|CLASSIC`
+- `POST /api/style?name=EVE|PLAYFUL`
 - `POST /api/backlight?value=0..100`
 - `POST /api/tune/set?key=<k>&value=<v>`
 - `POST /api/event?name=CALL|MAIL|TEAMS|LOUD|VERY_LOUD|QUIET|TILT|SHAKE`

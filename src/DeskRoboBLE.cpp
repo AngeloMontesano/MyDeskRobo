@@ -54,6 +54,23 @@ bool parseEmotion(const String &name, DeskRoboEmotion &out) {
   else if (name == "DENKEN") out = DESKROBO_EMOTION_DENKEN;
   else if (name == "WINK") out = DESKROBO_EMOTION_WINK;
   else if (name == "GLITCH") out = DESKROBO_EMOTION_GLITCH;
+  else if (name == "LOCKED") out = DESKROBO_EMOTION_LOCKED;
+  else if (name == "WIFI") out = DESKROBO_EMOTION_WIFI;
+  else if (name == "NORMAL") out = DESKROBO_EMOTION_ESP_NORMAL;
+  else if (name == "TIRED") out = DESKROBO_EMOTION_ESP_TIRED;
+  else if (name == "GLEE") out = DESKROBO_EMOTION_ESP_GLEE;
+  else if (name == "WORRIED") out = DESKROBO_EMOTION_ESP_WORRIED;
+  else if (name == "FOCUSED") out = DESKROBO_EMOTION_ESP_FOCUSED;
+  else if (name == "ANNOYED") out = DESKROBO_EMOTION_ESP_ANNOYED;
+  else if (name == "SURPRISED") out = DESKROBO_EMOTION_ESP_SURPRISED;
+  else if (name == "SKEPTIC") out = DESKROBO_EMOTION_ESP_SKEPTIC;
+  else if (name == "FRUSTRATED") out = DESKROBO_EMOTION_ESP_FRUSTRATED;
+  else if (name == "UNIMPRESSED") out = DESKROBO_EMOTION_ESP_UNIMPRESSED;
+  else if (name == "SUSPICIOUS") out = DESKROBO_EMOTION_ESP_SUSPICIOUS;
+  else if (name == "SQUINT") out = DESKROBO_EMOTION_ESP_SQUINT;
+  else if (name == "FURIOUS") out = DESKROBO_EMOTION_ESP_FURIOUS;
+  else if (name == "SCARED") out = DESKROBO_EMOTION_ESP_SCARED;
+  else if (name == "AWE") out = DESKROBO_EMOTION_ESP_AWE;
   else return false;
   return true;
 }
@@ -104,8 +121,7 @@ void handleBinaryCode(uint8_t code) {
       enqueueCmd({CMD_SET_EMOTION, DESKROBO_EMOTION_ANRUF, 0, 5000});
       break;
     case 0x0B:
-      // Debug mapping for clear visual verification from PC agent.
-      enqueueCmd({CMD_SET_EMOTION, DESKROBO_EMOTION_WINK, 0, 5000});
+      enqueueCmd({CMD_SET_EMOTION, DESKROBO_EMOTION_MAIL, 0, 5000});
       break;
     case 0x0C:
       enqueueCmd({CMD_SET_EMOTION, DESKROBO_EMOTION_DENKEN, 0, 5000});
@@ -117,10 +133,10 @@ void handleBinaryCode(uint8_t code) {
       enqueueCmd({CMD_SET_EMOTION, DESKROBO_EMOTION_EXCITED, 0, 2500});
       break;
     case 0x0F:
-      enqueueCmd({CMD_SET_EMOTION, DESKROBO_EMOTION_ANGST, 0, 3000});
+      enqueueCmd({CMD_SET_EMOTION, DESKROBO_EMOTION_LOCKED, 0, 3000});
       break;
     case 0x10:
-      enqueueCmd({CMD_SET_EMOTION, DESKROBO_EMOTION_ANRUF, 0, 3000});
+      enqueueCmd({CMD_SET_EMOTION, DESKROBO_EMOTION_WIFI, 0, 3000});
       break;
     case 0xFF:
       enqueueCmd({CMD_SET_EMOTION, DESKROBO_EMOTION_IDLE, 0, 1500});

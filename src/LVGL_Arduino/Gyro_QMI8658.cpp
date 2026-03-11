@@ -1,4 +1,5 @@
 #include "Gyro_QMI8658.h"
+#include <math.h>
 
 IMUdata Accel;
 IMUdata Gyro;
@@ -14,6 +15,24 @@ lpf_t acc_lpf;
 float accelScales, gyroScales;
 uint8_t readings[12];
 uint32_t reading_timestamp_us; // timestamp in arduino micros() time
+static bool s_qmi_ready = false;
+
+static bool qmi_probe_addr(uint8_t addr, uint8_t *who, uint8_t *rev) {
+    uint8_t who_local = 0;
+    if (I2C_Read(addr, QMI8658_WHO_AM_I, &who_local, 1)) {
+        return false;
+    }
+    if ((who_local == 0x00) || (who_local == 0xFF)) {
+        return false;
+    }
+    uint8_t rev_local = 0;
+    if (I2C_Read(addr, QMI8658_REVISION_ID, &rev_local, 1)) {
+        rev_local = 0;
+    }
+    if (who) *who = who_local;
+    if (rev) *rev = rev_local;
+    return true;
+}
 
 /**
  * Inialize Wire and send default configs
@@ -21,21 +40,33 @@ uint32_t reading_timestamp_us; // timestamp in arduino micros() time
  */
 void QMI8658_Init(void)
 {
-    uint8_t buf[1] = {0};
+    uint8_t who = 0;
+    uint8_t rev = 0;
+    s_qmi_ready = false;
 
     // Auto-detect sensor address because board revisions may wire SA0 differently.
-    Device_addr = QMI8658_L_SLAVE_ADDRESS;
-    if (!I2C_Read(QMI8658_L_SLAVE_ADDRESS, QMI8658_WHO_AM_I, buf, 1) && (buf[0] != 0x00) && (buf[0] != 0xFF)) {
+    if (qmi_probe_addr(QMI8658_L_SLAVE_ADDRESS, &who, &rev)) {
         Device_addr = QMI8658_L_SLAVE_ADDRESS;
-    } else if (!I2C_Read(QMI8658_H_SLAVE_ADDRESS, QMI8658_WHO_AM_I, buf, 1) && (buf[0] != 0x00) && (buf[0] != 0xFF)) {
+        s_qmi_ready = true;
+    } else if (qmi_probe_addr(QMI8658_H_SLAVE_ADDRESS, &who, &rev)) {
         Device_addr = QMI8658_H_SLAVE_ADDRESS;
-    } else {
-        // Fallback to default wiring if probe fails.
-        Device_addr = QMI8658_L_SLAVE_ADDRESS;
+        s_qmi_ready = true;
     }
 
-    I2C_Read(Device_addr, QMI8658_REVISION_ID, buf, 1);
-    printf("QMI8658 addr: 0x%02X rev: 0x%02X\r\n", Device_addr, buf[0]);
+    if (!s_qmi_ready) {
+        Device_addr = QMI8658_L_SLAVE_ADDRESS;
+        Accel.x = NAN;
+        Accel.y = NAN;
+        Accel.z = NAN;
+        Gyro.x = NAN;
+        Gyro.y = NAN;
+        Gyro.z = NAN;
+        printf("QMI8658 not detected on 0x%02X/0x%02X, gyro disabled.\r\n",
+               QMI8658_L_SLAVE_ADDRESS, QMI8658_H_SLAVE_ADDRESS);
+        return;
+    }
+
+    printf("QMI8658 ready addr=0x%02X who=0x%02X rev=0x%02X\r\n", Device_addr, who, rev);
     setState(sensor_running);             
 
     setAccScale(acc_scale);            
@@ -72,7 +103,12 @@ void QMI8658_Init(void)
 
 void QMI8658_Loop(void)
 {
+  if (!s_qmi_ready) return;
   getAccelerometer();
+}
+
+bool QMI8658_IsReady(void) {
+    return s_qmi_ready;
 }
 
 /**
@@ -82,6 +118,7 @@ void QMI8658_Loop(void)
  */
 void QMI8658_transmit(uint8_t addr, uint8_t data)
 {
+    if (!s_qmi_ready) return;
     I2C_Write(Device_addr, addr, &data, 1);
 }
 
@@ -92,7 +129,8 @@ void QMI8658_transmit(uint8_t addr, uint8_t data)
  */
 uint8_t QMI8658_receive(uint8_t addr)
 {
-    uint8_t retval;
+    uint8_t retval = 0xFF;
+    if (!s_qmi_ready) return retval;
     I2C_Read(Device_addr, addr, &retval, 1);
     return retval;
 }
@@ -274,6 +312,7 @@ void setState(sensor_state_t state)
 
 void getAccelerometer(void)
 {
+    if (!s_qmi_ready) return;
 
     uint8_t buf[6];
     I2C_Read(Device_addr, QMI8658_AX_L, buf, 6);
@@ -287,6 +326,7 @@ void getAccelerometer(void)
 }
 void getGyroscope(void)
 {
+    if (!s_qmi_ready) return;
     uint8_t buf[6];
     I2C_Read(Device_addr, QMI8658_GX_L, buf, 6);
     Gyro.x = (float)((int16_t)((buf[1]<<8) | (buf[0])));
