@@ -5,6 +5,8 @@
 #include "LVGL_Arduino/Gyro_QMI8658.h"
 #include "LVGL_Arduino/I2C_Driver.h"
 #include "LVGL_Arduino/LVGL_Driver.h"
+#include "LVGL_Arduino/SD_Card.h"
+#include "LVGL_Arduino/TCA9554PWR.h"
 #include "DeskRoboAudio.h"
 #include "DeskRoboMVP.h"
 #include "DeskRoboWeb.h"
