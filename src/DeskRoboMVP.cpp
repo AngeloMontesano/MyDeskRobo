@@ -58,10 +58,12 @@ static Preferences s_prefs;
 static DeskRoboFaceStyle s_face_style = DESKROBO_STYLE_EVE;
 
 static FaceStyle to_face_style(DeskRoboFaceStyle style) {
+  if (style == DESKROBO_STYLE_ROUND) return FACE_STYLE_ROUND;
   return FACE_STYLE_EVE;
 }
 
 static const char *style_name(DeskRoboFaceStyle style) {
+  if (style == DESKROBO_STYLE_ROUND) return "ROUND";
   return "EVE";
 }
 
@@ -70,6 +72,10 @@ static bool parse_style_name(const char *name, DeskRoboFaceStyle &out) {
   if ((strcmp(name, "EVE") == 0) || (strcmp(name, "eve") == 0) ||
       (strcmp(name, "EVE_CINEMATIC") == 0) || (strcmp(name, "eve_cinematic") == 0)) {
     out = DESKROBO_STYLE_EVE;
+    return true;
+  }
+  if ((strcmp(name, "ROUND") == 0) || (strcmp(name, "round") == 0)) {
+    out = DESKROBO_STYLE_ROUND;
     return true;
   }
   return false;

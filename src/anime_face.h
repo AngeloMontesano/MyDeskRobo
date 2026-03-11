@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <stdint.h>
 #include <lvgl.h>
 
 #define DISPLAY_WIDTH  360
@@ -23,6 +24,7 @@ typedef enum {
 
 typedef enum {
   FACE_STYLE_EVE = 0,
+  FACE_STYLE_ROUND
 } FaceStyle;
 
 class AnimeFace {
@@ -73,4 +75,6 @@ class AnimeFace {
 
   void drawFace();
   void drawEye(int16_t cx, int16_t cy, Emotion e, bool isRight, bool blink);
+  void drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool blink);
+  void drawEyeRound(int16_t cx, int16_t cy, Emotion e, bool isRight, bool blink);
 };

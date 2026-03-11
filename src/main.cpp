@@ -5,12 +5,7 @@
 #include "LVGL_Arduino/Gyro_QMI8658.h"
 #include "LVGL_Arduino/I2C_Driver.h"
 #include "LVGL_Arduino/LVGL_Driver.h"
-#include "LVGL_Arduino/RTC_PCF85063.h"
-#include "LVGL_Arduino/SD_Card.h"
-#include "LVGL_Arduino/TCA9554PWR.h"
-
 #include "DeskRoboAudio.h"
-#include "DeskRoboBLE.h"
 #include "DeskRoboMVP.h"
 #include "DeskRoboWeb.h"
 
@@ -58,8 +53,6 @@ void setup() {
   Serial.println("[BOOT] I2C init done");
   TCA9554PWR_Init(0x00);
   Serial.println("[BOOT] EXIO init done");
-  PCF85063_Init();
-  Serial.println("[BOOT] RTC init done");
   BAT_Init();
   Serial.println("[BOOT] BAT init done");
   SD_Init();
@@ -85,8 +78,6 @@ void setup() {
   Serial.println("[BOOT] DeskRobo MVP ready");
   DeskRoboWeb_Init();
   Serial.println("[BOOT] DeskRobo Web ready");
-  DeskRoboBLE_Init();
-  Serial.println("[BOOT] DeskRobo BLE ready");
   DeskRoboAudio_Init();
   Serial.println("[BOOT] DeskRobo Audio test ready");
 }
@@ -95,7 +86,6 @@ void loop() {
   DeskRobo_Loop();
   DeskRoboAudio_Loop();
   DeskRoboWeb_Loop();
-  DeskRoboBLE_Loop();
   Lvgl_Loop();
   vTaskDelay(pdMS_TO_TICKS(5));
 }
