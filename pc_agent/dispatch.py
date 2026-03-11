@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 from typing import Optional
 
 from config import IDLE_AFTER_NOTIFY_MS
@@ -16,8 +16,7 @@ class Dispatcher:
         await asyncio.sleep(delay_s)
         self.current_emotion = Emotion.IDLE
         self.current_priority = 0
-        if self.ble.is_connected:
-            await self.ble.send_emotion(Emotion.IDLE)
+        await self.ble.send_emotion(Emotion.IDLE)
 
     async def handle(self, event: RoboEvent):
         if event.priority < self.current_priority:
@@ -29,8 +28,7 @@ class Dispatcher:
         self.current_emotion = event.emotion
         self.current_priority = event.priority
 
-        if self.ble.is_connected:
-            await self.ble.send_emotion(event.emotion)
+        await self.ble.send_emotion(event.emotion)
 
         duration_ms = event.duration_ms if event.duration_ms > 0 else 0
         if duration_ms == 0 and event.priority >= 6:
