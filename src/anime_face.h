@@ -74,6 +74,7 @@ class AnimeFace {
   Tuning tuning_;
 
   void drawFace();
+  void drawMouth(int16_t cx, int16_t cy, Emotion e, bool blink);
   void drawEye(int16_t cx, int16_t cy, Emotion e, bool isRight, bool blink);
   void drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool blink);
   void drawEyeRound(int16_t cx, int16_t cy, Emotion e, bool isRight, bool blink);

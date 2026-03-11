@@ -1,6 +1,7 @@
 #include "DeskRoboWeb.h"
 
 #include <Arduino.h>
+#include <Preferences.h>
 #include <Update.h>
 #include <WebServer.h>
 #include <WiFi.h>
@@ -14,6 +15,9 @@
 
 namespace {
 WebServer server(80);
+Preferences g_web_prefs;
+bool g_ap_is_on = false;
+uint32_t g_ap_start_ms = 0;
 
 const char *kApSsid = "DeskRobo-Setup";
 
@@ -34,7 +38,7 @@ button,select{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,25
 button:hover{background:rgba(255,255,255,0.1);transform:translateY(-2px);box-shadow:0 5px 15px rgba(0,0,0,0.2)}
 button:active{transform:translateY(0)}
 input[type=range]{width:100%;accent-color:#00d2ff}
-input[type=number]{width:100%;box-sizing:border-box;background:rgba(0,0,0,0.2);color:#fff;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;font-family:'Inter',sans-serif}
+input[type=number],input[type=text],input[type=password]{width:100%;box-sizing:border-box;background:rgba(0,0,0,0.2);color:#fff;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;font-family:'Inter',sans-serif}
 small{opacity:0.6;font-size:0.8rem;display:block;margin-top:8px}
 .status-badge{display:inline-block;padding:5px 10px;border-radius:20px;background:rgba(0,210,255,0.1);color:#00d2ff;font-size:0.85rem;font-weight:600}
 </style></head><body><div class=wrap>
@@ -59,6 +63,17 @@ small{opacity:0.6;font-size:0.8rem;display:block;margin-top:8px}
 <span id=blv style="min-width:40px;font-weight:600">--%</span>
 </div>
 <div style="margin-top:15px" class=grid><button onclick="setBacklight()">Apply Brightness</button></div>
+</div>
+<div class=card><h3>WiFi Settings</h3>
+<div style="margin-bottom:10px" class=grid><button onclick="scanWifi()">Scan Networks</button></div>
+<div id=wifiList style="margin-bottom:15px;max-height:150px;overflow-y:auto;border-radius:8px"></div>
+<input type=text id=wifiSsid placeholder="SSID" style="margin-bottom:10px">
+<input type=password id=wifiPass placeholder="Password" style="margin-bottom:10px">
+<div class=grid>
+  <button onclick="saveWifi()">Save & Connect</button>
+  <button onclick="clearWifi()">Forget WiFi</button>
+</div>
+<div id=wifiState style="margin-top:10px;font-size:0.9rem;color:#00d2ff"></div>
 </div>
 <div class=card><h3>Audio Test</h3>
 <div class=status-badge id=audioState style="margin-bottom:15px">checking audio...</div>
@@ -108,7 +123,7 @@ small{opacity:0.6;font-size:0.8rem;display:block;margin-top:8px}
 </div>
 </div>
 <script>
-const emos=['IDLE','HAPPY','SAD','ANGRY','WOW','SLEEPY','CONFUSED','EXCITED','DIZZY'];
+const emos=['IDLE','HAPPY','SAD','ANGRY','WOW','SLEEPY','CONFUSED','EXCITED','DIZZY','MAIL','CALL','SHAKE'];
 const box=document.getElementById('emo');
 const leftSel=document.getElementById('leftEye');
 const rightSel=document.getElementById('rightEye');
@@ -145,6 +160,32 @@ async function setBeepLevel(){
  const v=parseInt(document.getElementById('beepLvl').value,10);
  await fetch('/api/audio/level?value='+v,{method:'POST'});
  await refreshAudio();
+}
+async function scanWifi(){
+ document.getElementById('wifiState').textContent='Scanning...';
+ const r=await fetch('/api/wifi_scan');
+ const n=await r.json();
+ const l=document.getElementById('wifiList');l.innerHTML='';
+ n.forEach(x=>{
+  const b=document.createElement('div');
+  b.textContent=x;
+  b.style.cursor='pointer';b.style.padding='5px';b.style.marginBottom='2px';
+  b.style.background='rgba(255,255,255,0.05)';
+  b.onclick=()=>document.getElementById('wifiSsid').value=x;
+  l.appendChild(b);
+ });
+ document.getElementById('wifiState').textContent='Scan complete';
+}
+async function saveWifi(){
+ const s=document.getElementById('wifiSsid').value;
+ const p=document.getElementById('wifiPass').value;
+ document.getElementById('wifiState').textContent='Saving...';
+ const r=await fetch('/api/wifi_save?ssid='+encodeURIComponent(s)+'&pass='+encodeURIComponent(p), {method:'POST'});
+ document.getElementById('wifiState').textContent=await r.text();
+}
+async function clearWifi(){
+ const r=await fetch('/api/wifi_clear',{method:'POST'});
+ document.getElementById('wifiState').textContent=await r.text();
 }
 async function refreshTune(){const r=await fetch('/api/tune/get');const t=await r.json();
  for(const k of Object.keys(t)){const el=document.getElementById('t_'+k);if(el)el.value=t[k];}}
@@ -389,25 +430,74 @@ void handleRoutes() {
         }
       });
 
+  server.on("/api/wifi_scan", HTTP_GET, []() {
+    int n = WiFi.scanNetworks();
+    String json = "[";
+    for (int i = 0; i < n; ++i) {
+      if (i > 0) json += ",";
+      json += "\"" + WiFi.SSID(i) + "\"";
+    }
+    json += "]";
+    server.send(200, "application/json", json);
+  });
+
+  server.on("/api/wifi_save", HTTP_POST, []() {
+    const String ssid = server.arg("ssid");
+    const String pass = server.arg("pass");
+    g_web_prefs.begin("deskrobo", false);
+    g_web_prefs.putString("wifi_ssid", ssid);
+    g_web_prefs.putString("wifi_pass", pass);
+    g_web_prefs.end();
+    server.send(200, "text/plain", "Saved! Rebooting...");
+    delay(1000);
+    ESP.restart();
+  });
+
+  server.on("/api/wifi_clear", HTTP_POST, []() {
+    g_web_prefs.begin("deskrobo", false);
+    g_web_prefs.remove("wifi_ssid");
+    g_web_prefs.remove("wifi_pass");
+    g_web_prefs.end();
+    server.send(200, "text/plain", "Cleared! Rebooting...");
+    delay(1000);
+    ESP.restart();
+  });
+
   server.onNotFound([]() { server.send(404, "text/plain", "not found"); });
 }
 } // namespace
 
 void DeskRoboWeb_Init() {
+  g_web_prefs.begin("deskrobo", true);
+  String ssid = g_web_prefs.getString("wifi_ssid", "");
+  String pass = g_web_prefs.getString("wifi_pass", "");
+  g_web_prefs.end();
+
   WiFi.mode(WIFI_AP_STA);
   WiFi.setSleep(false);
   WiFi.softAP(kApSsid);
+  g_ap_is_on = true;
+  g_ap_start_ms = millis();
+  
   Serial.printf("[WEB] AP started: %s IP=%s\n", kApSsid,
                 WiFi.softAPIP().toString().c_str());
 
-  WiFi.begin("home", "mon015146659541");
-  Serial.printf("[WEB] Connecting to home wlan for time sync...\n");
-
-  configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.nist.gov");
+  if (ssid.length() > 0) {
+    WiFi.begin(ssid.c_str(), pass.c_str());
+    Serial.printf("[WEB] Connecting to WLAN %s for time sync...\n", ssid.c_str());
+    configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.nist.gov");
+  }
 
   handleRoutes();
   server.begin();
   Serial.println("[WEB] HTTP server started");
 }
 
-void DeskRoboWeb_Loop() { server.handleClient(); }
+void DeskRoboWeb_Loop() {
+  server.handleClient();
+  if (g_ap_is_on && (millis() - g_ap_start_ms > 300000)) {
+    g_ap_is_on = false;
+    WiFi.softAPdisconnect(true);
+    Serial.println("[WEB] AP auto-disabled after 5 min");
+  }
+}

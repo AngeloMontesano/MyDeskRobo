@@ -171,6 +171,10 @@ void AnimeFace::update() {
   lv_obj_clean(canvas_);
   drawEye(CX - eye_gap + drift_dx_ + saccade_dx_, CY + drift_dy_ + saccade_dy_, left, false, blink);
   drawEye(CX + eye_gap + drift_dx_ + saccade_dx_, CY + drift_dy_ + saccade_dy_, right, true, blink);
+  
+  if (style_ == FACE_STYLE_ROUND) {
+    drawMouth(CX + drift_dx_ + saccade_dx_, CY + drift_dy_ + saccade_dy_, current_, blink);
+  }
 
   if (current_ == EMOTION_SLEEPY && left == EMOTION_SLEEPY && right == EMOTION_SLEEPY) {
     for(int i = 0; i < 3; i++) {
@@ -200,6 +204,10 @@ void AnimeFace::drawFace() {
   const int16_t eye_gap = 68;
   drawEye(CX - eye_gap, CY, left, false, false);
   drawEye(CX + eye_gap, CY, right, true, false);
+
+  if (style_ == FACE_STYLE_ROUND) {
+    drawMouth(CX, CY, current_, false);
+  }
 }
 
 void AnimeFace::drawEye(int16_t cx, int16_t cy, Emotion e, bool isRight, bool blink) {
@@ -207,6 +215,60 @@ void AnimeFace::drawEye(int16_t cx, int16_t cy, Emotion e, bool isRight, bool bl
     drawEyeRound(cx, cy, e, isRight, blink);
   } else {
     drawEyeEVE(cx, cy, e, isRight, blink);
+  }
+}
+
+void AnimeFace::drawMouth(int16_t cx, int16_t cy, Emotion e, bool blink) {
+  if (blink) return; // simplify mouth on blink
+
+  if (e == EMOTION_SAD) {
+      int16_t mw = 20;
+      int16_t mh = 20;
+      int16_t border = 5;
+      lv_obj_t *mouth = lv_obj_create(canvas_);
+      lv_obj_remove_style_all(mouth);
+      lv_obj_set_size(mouth, mw, mh);
+      lv_obj_set_pos(mouth, cx - mw/2, cy + 30);
+      lv_obj_set_style_radius(mouth, LV_RADIUS_CIRCLE, 0);
+      lv_obj_set_style_border_width(mouth, border, 0);
+      lv_obj_set_style_border_color(mouth, lv_color_make(0x0F, 0xDA, 0xFF), 0);
+      
+      lv_obj_t *cut = lv_obj_create(canvas_);
+      lv_obj_remove_style_all(cut);
+      lv_obj_set_size(cut, mw + 10, mh/2 + 10);
+      lv_obj_set_pos(cut, cx - (mw+10)/2, cy + 30 + mh/2 - border/2 + 2);
+      lv_obj_set_style_bg_color(cut, lv_color_hex(0x06080D), 0);
+      lv_obj_set_style_bg_opa(cut, LV_OPA_COVER, 0);
+  }
+  else if (e == EMOTION_HAPPY || e == EMOTION_EXCITED) {
+      int16_t mw = 22;
+      int16_t mh = 22;
+      int16_t border = 5;
+      lv_obj_t *mouth = lv_obj_create(canvas_);
+      lv_obj_remove_style_all(mouth);
+      lv_obj_set_size(mouth, mw, mh);
+      lv_obj_set_pos(mouth, cx - mw/2, cy + 20);
+      lv_obj_set_style_radius(mouth, LV_RADIUS_CIRCLE, 0);
+      lv_obj_set_style_border_width(mouth, border, 0);
+      lv_obj_set_style_border_color(mouth, lv_color_make(0x0F, 0xDA, 0xFF), 0);
+      
+      lv_obj_t *cut = lv_obj_create(canvas_);
+      lv_obj_remove_style_all(cut);
+      lv_obj_set_size(cut, mw + 10, mh/2 + 10);
+      lv_obj_set_pos(cut, cx - (mw+10)/2, cy + 20 - 5);
+      lv_obj_set_style_bg_color(cut, lv_color_hex(0x06080D), 0);
+      lv_obj_set_style_bg_opa(cut, LV_OPA_COVER, 0);
+  }
+  else if (e == EMOTION_WOW || e == EMOTION_CONFUSED) {
+      int16_t mw = 12;
+      int16_t mh = 16;
+      lv_obj_t *mouth = lv_obj_create(canvas_);
+      lv_obj_remove_style_all(mouth);
+      lv_obj_set_size(mouth, mw, mh);
+      lv_obj_set_pos(mouth, cx - mw/2 + (e==EMOTION_CONFUSED? 10 : 0), cy + 25);
+      lv_obj_set_style_radius(mouth, LV_RADIUS_CIRCLE, 0);
+      lv_obj_set_style_border_width(mouth, 4, 0);
+      lv_obj_set_style_border_color(mouth, lv_color_make(0x0F, 0xDA, 0xFF), 0);
   }
 }
 
@@ -240,22 +302,22 @@ void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool
       cy += 15;
       break;
     case EMOTION_SAD:
-      h = blink ? h : 80;
-      w = 56;
-      cy += 15;
-      carve_top = !blink;
-      carve_h = 45;
-      carve_dx = isRight ? 18 : -18;
-      carve_angle = isRight ? -140 : 140;
-      break;
-    case EMOTION_ANGRY:
-      h = blink ? h : 80;
-      w = 56;
+      h = blink ? h : 110;
+      w = 60;
       cy += 5;
       carve_top = !blink;
-      carve_h = 45;
-      carve_dx = isRight ? -18 : 18;
-      carve_angle = isRight ? 160 : -160;
+      carve_h = 24;       // smaller height for the cut to act like a brow
+      carve_dx = isRight ? 10 : -10;
+      carve_angle = isRight ? -150 : 150; // Gentle downward curve towards outside for sad
+      break;
+    case EMOTION_ANGRY:
+      h = blink ? h : 110;
+      w = 60;
+      cy += 5;
+      carve_top = !blink;
+      carve_h = 24;      // brow cut
+      carve_dx = isRight ? -10 : 10;
+      carve_angle = isRight ? 200 : -200; // Sharp downward curve towards inside for angry
       break;
     case EMOTION_WOW:
       w = 66;
@@ -292,6 +354,41 @@ void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool
       carve_top = false;
       carve_bottom = !blink;
       carve_bottom_h = 15;
+      break;
+    case EMOTION_MAIL:
+      if (!blink) {
+        h = 60;
+        w = 90;
+        cy += 10;
+        carve_top = true;
+        carve_h = 24;
+        carve_dx = 0;
+        carve_angle = isRight ? -150 : 150;
+      } else {
+        h = 8;
+        w = 90;
+      }
+      break;
+    case EMOTION_CALL:
+      if (!blink) {
+        h = 80;
+        w = 40;
+        cx += (int)(sinf(millis() / 30.0f) * 4.0f); // Fast ringing wiggle
+        cy += (int)(cosf(millis() / 30.0f) * 4.0f);
+        carve_top = true;
+        carve_h = 20;
+        carve_dx = isRight ? 10 : -10;
+        carve_angle = 0;
+      } else {
+        h = 8;
+      }
+      break;
+    case EMOTION_SHAKE:
+      h = blink ? h : 110;
+      w = 60;
+      // High speed bouncing
+      cx += (int)(sinf(millis() / 50.0f) * 80.0f);
+      cy += (int)(cosf(millis() / 70.0f) * 80.0f);
       break;
     case EMOTION_IDLE:
     default:
@@ -397,6 +494,26 @@ void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool
     lv_obj_set_style_bg_color(shadow, lv_color_hex(0x1A2538), 0);
     lv_obj_set_style_bg_opa(shadow, (lv_opa_t) 54, 0);
   }
+
+  if (e == EMOTION_MAIL && !blink) {
+    lv_obj_t *env_V = lv_obj_create(canvas_);
+    lv_obj_remove_style_all(env_V);
+    lv_obj_set_size(env_V, w, h/2 + 6);
+    lv_obj_set_pos(env_V, cx - w/2, cy - h/2 - 2);
+    lv_obj_set_style_bg_color(env_V, bg, 0);
+    lv_obj_set_style_bg_opa(env_V, LV_OPA_COVER, 0);
+
+    lv_obj_t *env_V_inner = lv_obj_create(canvas_);
+    lv_obj_remove_style_all(env_V_inner);
+    lv_obj_set_size(env_V_inner, w, h/2 );
+    lv_obj_set_pos(env_V_inner, cx - w/2, cy - h/2 - 8);
+    lv_obj_set_style_bg_color(env_V_inner, color, 0);
+    lv_obj_set_style_bg_opa(env_V_inner, LV_OPA_COVER, 0);
+    
+    lv_obj_set_style_radius(env_V, 0, 0);
+    lv_obj_set_style_transform_angle(env_V, isRight ? 200 : -200, 0);
+    lv_obj_set_style_transform_angle(env_V_inner, isRight ? 200 : -200, 0);
+  }
 }
 
 void AnimeFace::drawEyeRound(int16_t cx, int16_t cy, Emotion e, bool isRight, bool blink) {
@@ -409,6 +526,7 @@ void AnimeFace::drawEyeRound(int16_t cx, int16_t cy, Emotion e, bool isRight, bo
   int16_t carve_angle = 0;
   bool carve_bottom = false;
   int16_t carve_bottom_h = 0;
+  bool carve_bottom_curve = false;
   const lv_color_t bg = lv_color_hex(0x06080D);
 
   if (blink && (e != EMOTION_WOW)) {
@@ -425,10 +543,9 @@ void AnimeFace::drawEyeRound(int16_t cx, int16_t cy, Emotion e, bool isRight, bo
     case EMOTION_SAD:
       h = blink ? h : 44;
       cy += 5;
-      carve_top = !blink;
-      carve_h = 24;
-      carve_angle = isRight ? -150 : 150;
-      carve_dx = isRight ? 6 : -6;
+      if (!blink) {
+        carve_bottom_curve = true;
+      }
       break;
     case EMOTION_ANGRY:
       h = blink ? h : 44;
@@ -504,6 +621,17 @@ void AnimeFace::drawEyeRound(int16_t cx, int16_t cy, Emotion e, bool isRight, bo
     lv_obj_remove_style_all(cut);
     lv_obj_set_size(cut, w + 20, carve_bottom_h);
     lv_obj_set_pos(cut, cx - (w + 20) / 2, cy + h / 2 - carve_bottom_h + 2);
+    lv_obj_set_style_bg_color(cut, bg, 0);
+    lv_obj_set_style_bg_opa(cut, LV_OPA_COVER, 0);
+  }
+
+  if (carve_bottom_curve) {
+    lv_obj_t *cut = lv_obj_create(canvas_);
+    lv_obj_remove_style_all(cut);
+    int16_t cw = w + 24;
+    lv_obj_set_size(cut, cw, cw);
+    lv_obj_set_pos(cut, cx - cw/2 + (isRight ? 6 : -6), cy + h/2 - 16);
+    lv_obj_set_style_radius(cut, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(cut, bg, 0);
     lv_obj_set_style_bg_opa(cut, LV_OPA_COVER, 0);
   }

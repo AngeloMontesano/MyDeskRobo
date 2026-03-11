@@ -8,6 +8,7 @@
 #include "LVGL_Arduino/SD_Card.h"
 #include "LVGL_Arduino/TCA9554PWR.h"
 #include "DeskRoboAudio.h"
+#include "DeskRoboBLE.h"
 #include "DeskRoboMVP.h"
 #include "DeskRoboWeb.h"
 
@@ -80,6 +81,8 @@ void setup() {
   Serial.println("[BOOT] DeskRobo MVP ready");
   DeskRoboWeb_Init();
   Serial.println("[BOOT] DeskRobo Web ready");
+  DeskRoboBLE_Init();
+  Serial.println("[BOOT] DeskRobo BLE ready");
   DeskRoboAudio_Init();
   Serial.println("[BOOT] DeskRobo Audio test ready");
 }
@@ -88,6 +91,7 @@ void loop() {
   DeskRobo_Loop();
   DeskRoboAudio_Loop();
   DeskRoboWeb_Loop();
+  DeskRoboBLE_Loop();
   Lvgl_Loop();
   vTaskDelay(pdMS_TO_TICKS(5));
 }

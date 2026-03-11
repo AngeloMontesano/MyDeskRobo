@@ -81,6 +81,23 @@ static bool parse_style_name(const char *name, DeskRoboFaceStyle &out) {
   return false;
 }
 
+static bool parse_emotion_name(const char *name, DeskRoboEmotion &out) {
+  if (!name) return false;
+  if (strcmp(name, "HAPPY") == 0) { out = DESKROBO_EMOTION_HAPPY; return true; }
+  if (strcmp(name, "SAD") == 0) { out = DESKROBO_EMOTION_SAD; return true; }
+  if (strcmp(name, "ANGRY") == 0) { out = DESKROBO_EMOTION_ANGRY; return true; }
+  if (strcmp(name, "WOW") == 0) { out = DESKROBO_EMOTION_WOW; return true; }
+  if (strcmp(name, "SLEEPY") == 0) { out = DESKROBO_EMOTION_SLEEPY; return true; }
+  if (strcmp(name, "CONFUSED") == 0) { out = DESKROBO_EMOTION_CONFUSED; return true; }
+  if (strcmp(name, "EXCITED") == 0) { out = DESKROBO_EMOTION_EXCITED; return true; }
+  if (strcmp(name, "DIZZY") == 0) { out = DESKROBO_EMOTION_DIZZY; return true; }
+  if (strcmp(name, "MAIL") == 0) { out = DESKROBO_EMOTION_MAIL; return true; }
+  if (strcmp(name, "CALL") == 0) { out = DESKROBO_EMOTION_CALL; return true; }
+  if (strcmp(name, "SHAKE") == 0) { out = DESKROBO_EMOTION_SHAKE; return true; }
+  if (strcmp(name, "IDLE") == 0) { out = DESKROBO_EMOTION_IDLE; return true; }
+  return false;
+}
+
 static Emotion to_anime(DeskRoboEmotion emotion) {
   switch (emotion) {
     case DESKROBO_EMOTION_HAPPY: return EMOTION_HAPPY;
@@ -89,8 +106,11 @@ static Emotion to_anime(DeskRoboEmotion emotion) {
     case DESKROBO_EMOTION_WOW: return EMOTION_WOW;
     case DESKROBO_EMOTION_SLEEPY: return EMOTION_SLEEPY;
     case DESKROBO_EMOTION_CONFUSED: return EMOTION_CONFUSED;
-    case DESKROBO_EMOTION_EXCITED: return EMOTION_EXCITED;
-    case DESKROBO_EMOTION_DIZZY: return EMOTION_DIZZY;
+    case DESKROBO_EMOTION_EXCITED:  return EMOTION_EXCITED;
+    case DESKROBO_EMOTION_DIZZY:    return EMOTION_DIZZY;
+    case DESKROBO_EMOTION_MAIL:     return EMOTION_MAIL;
+    case DESKROBO_EMOTION_CALL:     return EMOTION_CALL;
+    case DESKROBO_EMOTION_SHAKE:    return EMOTION_SHAKE;
     case DESKROBO_EMOTION_IDLE:
     default: return EMOTION_IDLE;
   }
@@ -105,6 +125,10 @@ static const char *emotion_name(DeskRoboEmotion emotion) {
     case DESKROBO_EMOTION_SLEEPY: return "SLEEPY";
     case DESKROBO_EMOTION_CONFUSED: return "CONFUSED";
     case DESKROBO_EMOTION_EXCITED: return "EXCITED";
+    case DESKROBO_EMOTION_DIZZY: return "DIZZY";
+    case DESKROBO_EMOTION_MAIL: return "MAIL";
+    case DESKROBO_EMOTION_CALL: return "CALL";
+    case DESKROBO_EMOTION_SHAKE: return "SHAKE";
     case DESKROBO_EMOTION_IDLE:
     default: return "IDLE";
   }
@@ -112,10 +136,10 @@ static const char *emotion_name(DeskRoboEmotion emotion) {
 
 static DeskRoboEventRule event_rule(DeskRoboEventType event_type) {
   switch (event_type) {
-    case DESKROBO_EVENT_PC_CALL: return {DESKROBO_EMOTION_EXCITED, 90, 8000};
+    case DESKROBO_EVENT_PC_CALL: return {DESKROBO_EMOTION_CALL, 90, 8000};
     case DESKROBO_EVENT_PC_TEAMS: return {DESKROBO_EMOTION_CONFUSED, 80, 5000};
-    case DESKROBO_EVENT_PC_MAIL: return {DESKROBO_EMOTION_HAPPY, 70, 3500};
-    case DESKROBO_EVENT_MOTION_SHAKE: return {DESKROBO_EMOTION_DIZZY, 60, 2500};
+    case DESKROBO_EVENT_PC_MAIL: return {DESKROBO_EMOTION_MAIL, 70, 3500};
+    case DESKROBO_EVENT_MOTION_SHAKE: return {DESKROBO_EMOTION_SHAKE, 60, 2500};
     case DESKROBO_EVENT_AUDIO_VERY_LOUD: return {DESKROBO_EMOTION_WOW, 50, 1800};
     case DESKROBO_EVENT_AUDIO_LOUD: return {DESKROBO_EMOTION_ANGRY, 40, 1400};
     case DESKROBO_EVENT_MOTION_TILT: return {DESKROBO_EMOTION_CONFUSED, 30, 1200};
