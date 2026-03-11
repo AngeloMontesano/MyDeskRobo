@@ -145,7 +145,8 @@ async function loadTune(){const r=await fetch('/api/tune/load',{method:'POST'});
 async function ota(){const fi=document.getElementById('f');if(!fi.files.length)return;
  const fd=new FormData();fd.append('firmware',fi.files[0]);document.getElementById('otaState').textContent='Uploading...';
  const r=await fetch('/api/ota',{method:'POST',body:fd});document.getElementById('otaState').textContent=await r.text();}
-setInterval(refresh,1200);refresh();refreshTune();refreshBacklight();refreshAudio();
+async function loopRefresh(){try{await refresh();}catch(e){}setTimeout(loopRefresh, 2000);}
+refreshTune();refreshBacklight();refreshAudio();loopRefresh();
 </script></body></html>
 )HTML";
 

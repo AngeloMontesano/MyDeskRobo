@@ -200,47 +200,52 @@ void AnimeFace::drawEye(int16_t cx, int16_t cy, Emotion e, bool isRight, bool bl
 
   switch (e) {
     case EMOTION_HAPPY:
-      h = blink ? h : 78;
-      cy += 6;
-      carve_top = !blink;
-      carve_h = 18;
-      carve_dx = isRight ? -10 : 10;
+      h = blink ? h : 84;
+      carve_bottom = !blink;
+      carve_bottom_h = 35;
+      cy += 15;
       break;
     case EMOTION_SAD:
-      h = blink ? h : 62;
-      w = 54;
-      cy += 20;
-      inner_clip = !blink;
-      clip_w = 14;
+      h = blink ? h : 80;
+      w = 56;
+      cy += 15;
+      carve_top = !blink;
+      carve_h = 35;
+      carve_dx = isRight ? 25 : -25;
       break;
     case EMOTION_ANGRY:
-      h = blink ? h : 62;
-      w = 54;
-      cy += 8;
-      inner_clip = !blink;
-      clip_w = 20;
+      h = blink ? h : 80;
+      w = 56;
+      cy += 5;
+      carve_top = !blink;
+      carve_h = 35;
+      carve_dx = isRight ? -25 : 25;
       break;
     case EMOTION_WOW:
-      w = 58;
-      h = 104;
-      add_side_shadow = true;
+      w = 66;
+      h = 114;
       break;
     case EMOTION_SLEEPY:
-      h = blink ? h : 12;
-      cy += 15;
+      h = blink ? h : 16;
+      w = 56;
+      cy += 35;
       add_side_shadow = false;
       break;
     case EMOTION_CONFUSED:
+      w = 56;
       if (isRight) {
-        cy -= 15;
+        h = blink ? h : 60;
+        cy += 10;
       } else {
-        cy += 15;
+        h = blink ? h : 110;
       }
-      w = 54;
       break;
     case EMOTION_EXCITED:
       w = 68;
-      h = blink ? h : 70;
+      h = blink ? h : 80;
+      carve_top = false;
+      carve_bottom = !blink;
+      carve_bottom_h = 15;
       break;
     case EMOTION_IDLE:
     default:
