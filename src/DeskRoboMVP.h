@@ -47,3 +47,5 @@ bool DeskRobo_SaveTuning();
 bool DeskRobo_LoadTuning();
 bool DeskRobo_SetStyleByName(const char *name);
 const char *DeskRobo_GetStyleName();
+void DeskRobo_SetStatusLabelVisible(bool visible);
+bool DeskRobo_GetStatusLabelVisible();

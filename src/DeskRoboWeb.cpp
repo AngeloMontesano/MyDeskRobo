@@ -95,6 +95,15 @@ small{opacity:0.6;font-size:0.8rem;display:block;margin-top:8px}
 <button onclick="evt('VERY_LOUD')">Very Loud</button><button onclick="evt('TILT')">Tilt</button>
 <button onclick="evt('SHAKE')">Shake</button><button onclick="evt('QUIET')">Quiet</button>
 </div></div>
+<div class=card><h3>Debug</h3>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+<span>Show bottom status label</span>
+<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+<input id=dbgStatusLabel type=checkbox>
+<span>DeskRobo: ...</span>
+</label>
+</div>
+</div>
 <div class=card><h3>Idle Tuning (Advanced)</h3>
 <div class=grid>
 <input id=t_drift_amp_px type=number placeholder="drift_amp_px">
@@ -127,6 +136,7 @@ const emos=['IDLE','HAPPY','SAD','ANGRY','WOW','SLEEPY','CONFUSED','EXCITED','DI
 const box=document.getElementById('emo');
 const leftSel=document.getElementById('leftEye');
 const rightSel=document.getElementById('rightEye');
+const dbgStatusLabel=document.getElementById('dbgStatusLabel');
 emos.forEach(e=>{const b=document.createElement('button');b.textContent=e;b.onclick=()=>setEmo(e);box.appendChild(b);});
 emos.forEach(e=>{const o1=document.createElement('option');o1.value=e;o1.textContent='Left: '+e;leftSel.appendChild(o1);
                  const o2=document.createElement('option');o2.value=e;o2.textContent='Right: '+e;rightSel.appendChild(o2);});
@@ -187,6 +197,14 @@ async function clearWifi(){
  const r=await fetch('/api/wifi_clear',{method:'POST'});
  document.getElementById('wifiState').textContent=await r.text();
 }
+async function refreshDebug(){
+ const r=await fetch('/api/debug/status_label');
+ const d=await r.json();
+ dbgStatusLabel.checked=!!d.visible;
+}
+async function setDebugStatusLabel(visible){
+ await fetch('/api/debug/status_label?visible='+(visible?1:0),{method:'POST'});
+}
 async function refreshTune(){const r=await fetch('/api/tune/get');const t=await r.json();
  for(const k of Object.keys(t)){const el=document.getElementById('t_'+k);if(el)el.value=t[k];}}
 async function applyTune(){
@@ -204,6 +222,8 @@ async function ota(){const fi=document.getElementById('f');if(!fi.files.length)r
  const fd=new FormData();fd.append('firmware',fi.files[0]);document.getElementById('otaState').textContent='Uploading... please wait';
  const r=await fetch('/api/ota',{method:'POST',body:fd});document.getElementById('otaState').textContent=await r.text();}
 async function loopRefresh(){try{await refresh();}catch(e){}setTimeout(loopRefresh, 2000);}
+dbgStatusLabel.addEventListener('change',async()=>{await setDebugStatusLabel(dbgStatusLabel.checked);});
+refreshDebug();
 refreshTune();refreshBacklight();refreshAudio();loopRefresh();
 </script></body></html>
 )HTML";
@@ -395,6 +415,21 @@ void handleRoutes() {
   server.on("/api/tune/load", HTTP_POST, []() {
     const bool ok = DeskRobo_LoadTuning();
     server.send(ok ? 200 : 500, "text/plain", ok ? "loaded" : "load failed");
+  });
+
+  server.on("/api/debug/status_label", HTTP_GET, []() {
+    server.send(200, "application/json",
+                DeskRobo_GetStatusLabelVisible() ? "{\"visible\":true}"
+                                                 : "{\"visible\":false}");
+  });
+
+  server.on("/api/debug/status_label", HTTP_POST, []() {
+    const String raw = server.hasArg("visible") ? server.arg("visible") : "1";
+    const bool visible =
+        !(raw == "0" || raw == "false" || raw == "FALSE" || raw == "off");
+    DeskRobo_SetStatusLabelVisible(visible);
+    server.send(200, "application/json",
+                visible ? "{\"visible\":true}" : "{\"visible\":false}");
   });
 
   server.on("/api/event", HTTP_POST, []() {
