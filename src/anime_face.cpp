@@ -359,11 +359,8 @@ void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool
       if (!blink) {
         h = 60;
         w = 90;
-        cy += 10;
-        carve_top = true;
-        carve_h = 24;
-        carve_dx = 0;
-        carve_angle = isRight ? -150 : 150;
+        // The drawing logic for the mail envelope is handled at the end of the function,
+        // we'll make the core object transparent here.
       } else {
         h = 8;
         w = 90;
@@ -372,15 +369,13 @@ void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool
     case EMOTION_CALL:
       if (!blink) {
         h = 80;
-        w = 40;
+        w = 80;
         cx += (int)(sinf(millis() / 30.0f) * 4.0f); // Fast ringing wiggle
         cy += (int)(cosf(millis() / 30.0f) * 4.0f);
-        carve_top = true;
-        carve_h = 20;
-        carve_dx = isRight ? 10 : -10;
-        carve_angle = 0;
+        // Drawing logic for phone handled at the end of the function.
       } else {
         h = 8;
+        w = 60;
       }
       break;
     case EMOTION_SHAKE:
@@ -449,8 +444,17 @@ void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool
   lv_obj_set_size(core, w, h);
   lv_obj_set_pos(core, cx - w / 2, cy - h / 2);
   lv_obj_set_style_radius(core, eye_radius, 0);
-  lv_obj_set_style_bg_color(core, color, 0);
-  lv_obj_set_style_bg_opa(core, LV_OPA_COVER, 0);
+
+  if ((e == EMOTION_MAIL || e == EMOTION_CALL) && !blink) {
+     // Don't draw the regular eye core for these custom shapes
+     lv_obj_set_style_bg_opa(core, LV_OPA_TRANSP, 0);
+     lv_obj_set_style_bg_opa(glow, LV_OPA_TRANSP, 0);
+     lv_obj_set_style_bg_opa(mid, LV_OPA_TRANSP, 0);
+     add_side_shadow = false;
+  } else {
+     lv_obj_set_style_bg_color(core, color, 0);
+     lv_obj_set_style_bg_opa(core, LV_OPA_COVER, 0);
+  }
 
   if (carve_top && (carve_h > 0)) {
     lv_obj_t *cut = lv_obj_create(canvas_);
@@ -496,23 +500,65 @@ void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool
   }
 
   if (e == EMOTION_MAIL && !blink) {
-    lv_obj_t *env_V = lv_obj_create(canvas_);
-    lv_obj_remove_style_all(env_V);
-    lv_obj_set_size(env_V, w, h/2 + 6);
-    lv_obj_set_pos(env_V, cx - w/2, cy - h/2 - 2);
-    lv_obj_set_style_bg_color(env_V, bg, 0);
-    lv_obj_set_style_bg_opa(env_V, LV_OPA_COVER, 0);
+    // Draw an envelope explicitly using multiple objects
+    lv_obj_t *body = lv_obj_create(canvas_);
+    lv_obj_remove_style_all(body);
+    lv_obj_set_size(body, w, h);
+    lv_obj_set_pos(body, cx - w/2, cy - h/2);
+    lv_obj_set_style_radius(body, 6, 0);
+    lv_obj_set_style_bg_color(body, bg, 0);
+    lv_obj_set_style_bg_opa(body, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(body, color, 0);
+    lv_obj_set_style_border_width(body, 4, 0);
 
-    lv_obj_t *env_V_inner = lv_obj_create(canvas_);
-    lv_obj_remove_style_all(env_V_inner);
-    lv_obj_set_size(env_V_inner, w, h/2 );
-    lv_obj_set_pos(env_V_inner, cx - w/2, cy - h/2 - 8);
-    lv_obj_set_style_bg_color(env_V_inner, color, 0);
-    lv_obj_set_style_bg_opa(env_V_inner, LV_OPA_COVER, 0);
-    
-    lv_obj_set_style_radius(env_V, 0, 0);
-    lv_obj_set_style_transform_angle(env_V, isRight ? 200 : -200, 0);
-    lv_obj_set_style_transform_angle(env_V_inner, isRight ? 200 : -200, 0);
+    lv_obj_t *flap = lv_obj_create(canvas_);
+    lv_obj_remove_style_all(flap);
+    lv_obj_set_size(flap, w - 8, h/2 + 2);
+    lv_obj_set_pos(flap, cx - (w-8)/2, cy - h/2 - 2);
+    lv_obj_set_style_bg_color(flap, bg, 0);
+    lv_obj_set_style_bg_opa(flap, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(flap, color, 0);
+    lv_obj_set_style_border_width(flap, 4, 0);
+    lv_obj_set_style_transform_angle(flap, 0, 0);
+    lv_obj_set_style_radius(flap, 4, 0);
+
+    // Cover the top edge of the flap so it looks like a triangle coming down
+    lv_obj_t *flap_mask = lv_obj_create(canvas_);
+    lv_obj_remove_style_all(flap_mask);
+    lv_obj_set_size(flap_mask, w + 10, h/2);
+    lv_obj_set_pos(flap_mask, cx - (w+10)/2, cy - h/2 - h/4);
+    lv_obj_set_style_bg_color(flap_mask, bg, 0);
+    lv_obj_set_style_bg_opa(flap_mask, LV_OPA_COVER, 0);
+    lv_obj_set_style_transform_angle(flap_mask, isRight ? 200 : -200, 0);
+  }
+
+  if (e == EMOTION_CALL && !blink) {
+    // Draw a phone handset explicitly
+    lv_obj_t *handle = lv_obj_create(canvas_);
+    lv_obj_remove_style_all(handle);
+    lv_obj_set_size(handle, 16, h - 20);
+    lv_obj_set_pos(handle, cx - 8, cy - (h-20)/2);
+    lv_obj_set_style_radius(handle, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(handle, color, 0);
+    lv_obj_set_style_bg_opa(handle, LV_OPA_COVER, 0);
+
+    lv_obj_t *top_speaker = lv_obj_create(canvas_);
+    lv_obj_remove_style_all(top_speaker);
+    lv_obj_set_size(top_speaker, 36, 16);
+    lv_obj_set_pos(top_speaker, cx - 18, cy - h/2 + 4);
+    lv_obj_set_style_radius(top_speaker, 8, 0);
+    lv_obj_set_style_bg_color(top_speaker, color, 0);
+    lv_obj_set_style_bg_opa(top_speaker, LV_OPA_COVER, 0);
+    lv_obj_set_style_transform_angle(top_speaker, 200, 0);
+
+    lv_obj_t *bot_speaker = lv_obj_create(canvas_);
+    lv_obj_remove_style_all(bot_speaker);
+    lv_obj_set_size(bot_speaker, 36, 16);
+    lv_obj_set_pos(bot_speaker, cx - 18, cy + h/2 - 20);
+    lv_obj_set_style_radius(bot_speaker, 8, 0);
+    lv_obj_set_style_bg_color(bot_speaker, color, 0);
+    lv_obj_set_style_bg_opa(bot_speaker, LV_OPA_COVER, 0);
+    lv_obj_set_style_transform_angle(bot_speaker, -200, 0);
   }
 }
 
