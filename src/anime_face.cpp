@@ -37,6 +37,7 @@ void AnimeFace::init(lv_obj_t *parent) {
   parent_ = parent;
   canvas_ = lv_obj_create(parent);
   lv_obj_remove_style_all(canvas_);
+  lv_obj_clear_flag(canvas_, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_size(canvas_, DISPLAY_WIDTH, DISPLAY_HEIGHT);
   lv_obj_set_pos(canvas_, 0, 0);
   lv_obj_set_style_bg_color(canvas_, lv_color_hex(0x06080D), 0);

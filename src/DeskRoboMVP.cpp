@@ -36,6 +36,7 @@ static AnimeFace s_face;
 static lv_obj_t *s_status = nullptr;
 static lv_obj_t *s_motion_debug = nullptr;
 static lv_obj_t *s_time_label = nullptr;
+static bool s_status_label_visible = true;
 
 static DeskRoboEmotion s_current_emotion = DESKROBO_EMOTION_IDLE;
 static uint8_t s_current_priority = 0;
@@ -157,7 +158,14 @@ static void apply_emotion_style() {
     s_face.clearEyePair();
     s_face.setEmotion(to_anime(s_current_emotion));
   }
-  lv_label_set_text_fmt(s_status, "DeskRobo: %s", emotion_name(s_current_emotion));
+  if (s_status) {
+    lv_label_set_text_fmt(s_status, "DeskRobo: %s", emotion_name(s_current_emotion));
+    if (s_status_label_visible) {
+      lv_obj_clear_flag(s_status, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_add_flag(s_status, LV_OBJ_FLAG_HIDDEN);
+    }
+  }
 }
 
 void DeskRobo_SetEmotion(DeskRoboEmotion emotion, uint32_t hold_ms) {
@@ -245,6 +253,20 @@ bool DeskRobo_SetStyleByName(const char *name) {
 
 const char *DeskRobo_GetStyleName() {
   return style_name(s_face_style);
+}
+
+void DeskRobo_SetStatusLabelVisible(bool visible) {
+  s_status_label_visible = visible;
+  if (!s_status) return;
+  if (s_status_label_visible) {
+    lv_obj_clear_flag(s_status, LV_OBJ_FLAG_HIDDEN);
+  } else {
+    lv_obj_add_flag(s_status, LV_OBJ_FLAG_HIDDEN);
+  }
+}
+
+bool DeskRobo_GetStatusLabelVisible() {
+  return s_status_label_visible;
 }
 
 void DeskRobo_PushEvent(DeskRoboEventType event_type) {
