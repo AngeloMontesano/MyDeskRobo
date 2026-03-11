@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <Arduino.h>
 
@@ -49,3 +49,6 @@ bool DeskRobo_SetStyleByName(const char *name);
 const char *DeskRobo_GetStyleName();
 void DeskRobo_SetStatusLabelVisible(bool visible);
 bool DeskRobo_GetStatusLabelVisible();
+void DeskRobo_SetBleConnected(bool connected);
+
+

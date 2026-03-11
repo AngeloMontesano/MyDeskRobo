@@ -1,10 +1,11 @@
-#include "DeskRoboMVP.h"
+﻿#include "DeskRoboMVP.h"
 
 #include <cstring>
 #include <lvgl.h>
 #include <math.h>
 #include <Preferences.h>
 
+#include "LVGL_Arduino/Display_ST77916.h"
 #include "LVGL_Arduino/Gyro_QMI8658.h"
 
 #include "anime_face.h"
@@ -24,6 +25,14 @@
 // Set to the analog mic pin if available on your board. -1 disables local mic.
 #ifndef DESKROBO_AUDIO_ADC_PIN
 #define DESKROBO_AUDIO_ADC_PIN (-1)
+#endif
+
+#ifndef DESKROBO_BLE_DISCONNECT_SLEEP_OFF_MS
+#define DESKROBO_BLE_DISCONNECT_SLEEP_OFF_MS (15UL * 60UL * 1000UL)
+#endif
+
+#ifndef DESKROBO_DEFAULT_WAKE_BACKLIGHT
+#define DESKROBO_DEFAULT_WAKE_BACKLIGHT 15
 #endif
 
 typedef struct {
@@ -46,6 +55,13 @@ static DeskRoboEmotion s_left_eye_emotion = DESKROBO_EMOTION_IDLE;
 static DeskRoboEmotion s_right_eye_emotion = DESKROBO_EMOTION_IDLE;
 static uint32_t s_eye_pair_expiry_ms = 0;
 static uint32_t s_time_expiry_ms = 0;
+
+static bool s_ble_connected = false;
+static bool s_ble_state_seen = false;
+static bool s_ble_sleep_face_active = false;
+static bool s_display_sleep_off = false;
+static uint32_t s_ble_disconnected_since_ms = 0;
+static uint8_t s_backlight_before_sleep = DESKROBO_DEFAULT_WAKE_BACKLIGHT;
 
 static uint32_t s_last_sensor_ms = 0;
 static uint32_t s_last_motion_ms = 0;
@@ -71,7 +87,8 @@ static const char *style_name(DeskRoboFaceStyle style) {
 static bool parse_style_name(const char *name, DeskRoboFaceStyle &out) {
   if (!name) return false;
   if ((strcmp(name, "EVE") == 0) || (strcmp(name, "eve") == 0) ||
-      (strcmp(name, "EVE_CINEMATIC") == 0) || (strcmp(name, "eve_cinematic") == 0)) {
+      (strcmp(name, "EVE_CINEMATIC") == 0) ||
+      (strcmp(name, "eve_cinematic") == 0)) {
     out = DESKROBO_STYLE_EVE;
     return true;
   }
@@ -84,69 +101,138 @@ static bool parse_style_name(const char *name, DeskRoboFaceStyle &out) {
 
 static bool parse_emotion_name(const char *name, DeskRoboEmotion &out) {
   if (!name) return false;
-  if (strcmp(name, "HAPPY") == 0) { out = DESKROBO_EMOTION_HAPPY; return true; }
-  if (strcmp(name, "SAD") == 0) { out = DESKROBO_EMOTION_SAD; return true; }
-  if (strcmp(name, "ANGRY") == 0) { out = DESKROBO_EMOTION_ANGRY; return true; }
-  if (strcmp(name, "WOW") == 0) { out = DESKROBO_EMOTION_WOW; return true; }
-  if (strcmp(name, "SLEEPY") == 0) { out = DESKROBO_EMOTION_SLEEPY; return true; }
-  if (strcmp(name, "CONFUSED") == 0) { out = DESKROBO_EMOTION_CONFUSED; return true; }
-  if (strcmp(name, "EXCITED") == 0) { out = DESKROBO_EMOTION_EXCITED; return true; }
-  if (strcmp(name, "DIZZY") == 0) { out = DESKROBO_EMOTION_DIZZY; return true; }
-  if (strcmp(name, "MAIL") == 0) { out = DESKROBO_EMOTION_MAIL; return true; }
-  if (strcmp(name, "CALL") == 0) { out = DESKROBO_EMOTION_CALL; return true; }
-  if (strcmp(name, "SHAKE") == 0) { out = DESKROBO_EMOTION_SHAKE; return true; }
-  if (strcmp(name, "IDLE") == 0) { out = DESKROBO_EMOTION_IDLE; return true; }
+  if (strcmp(name, "HAPPY") == 0) {
+    out = DESKROBO_EMOTION_HAPPY;
+    return true;
+  }
+  if (strcmp(name, "SAD") == 0) {
+    out = DESKROBO_EMOTION_SAD;
+    return true;
+  }
+  if (strcmp(name, "ANGRY") == 0) {
+    out = DESKROBO_EMOTION_ANGRY;
+    return true;
+  }
+  if (strcmp(name, "WOW") == 0) {
+    out = DESKROBO_EMOTION_WOW;
+    return true;
+  }
+  if (strcmp(name, "SLEEPY") == 0) {
+    out = DESKROBO_EMOTION_SLEEPY;
+    return true;
+  }
+  if (strcmp(name, "CONFUSED") == 0) {
+    out = DESKROBO_EMOTION_CONFUSED;
+    return true;
+  }
+  if (strcmp(name, "EXCITED") == 0) {
+    out = DESKROBO_EMOTION_EXCITED;
+    return true;
+  }
+  if (strcmp(name, "DIZZY") == 0) {
+    out = DESKROBO_EMOTION_DIZZY;
+    return true;
+  }
+  if (strcmp(name, "MAIL") == 0) {
+    out = DESKROBO_EMOTION_MAIL;
+    return true;
+  }
+  if (strcmp(name, "CALL") == 0) {
+    out = DESKROBO_EMOTION_CALL;
+    return true;
+  }
+  if (strcmp(name, "SHAKE") == 0) {
+    out = DESKROBO_EMOTION_SHAKE;
+    return true;
+  }
+  if (strcmp(name, "IDLE") == 0) {
+    out = DESKROBO_EMOTION_IDLE;
+    return true;
+  }
   return false;
 }
 
 static Emotion to_anime(DeskRoboEmotion emotion) {
   switch (emotion) {
-    case DESKROBO_EMOTION_HAPPY: return EMOTION_HAPPY;
-    case DESKROBO_EMOTION_SAD: return EMOTION_SAD;
-    case DESKROBO_EMOTION_ANGRY: return EMOTION_ANGRY;
-    case DESKROBO_EMOTION_WOW: return EMOTION_WOW;
-    case DESKROBO_EMOTION_SLEEPY: return EMOTION_SLEEPY;
-    case DESKROBO_EMOTION_CONFUSED: return EMOTION_CONFUSED;
-    case DESKROBO_EMOTION_EXCITED:  return EMOTION_EXCITED;
-    case DESKROBO_EMOTION_DIZZY:    return EMOTION_DIZZY;
-    case DESKROBO_EMOTION_MAIL:     return EMOTION_MAIL;
-    case DESKROBO_EMOTION_CALL:     return EMOTION_CALL;
-    case DESKROBO_EMOTION_SHAKE:    return EMOTION_SHAKE;
+    case DESKROBO_EMOTION_HAPPY:
+      return EMOTION_HAPPY;
+    case DESKROBO_EMOTION_SAD:
+      return EMOTION_SAD;
+    case DESKROBO_EMOTION_ANGRY:
+      return EMOTION_ANGRY;
+    case DESKROBO_EMOTION_WOW:
+      return EMOTION_WOW;
+    case DESKROBO_EMOTION_SLEEPY:
+      return EMOTION_SLEEPY;
+    case DESKROBO_EMOTION_CONFUSED:
+      return EMOTION_CONFUSED;
+    case DESKROBO_EMOTION_EXCITED:
+      return EMOTION_EXCITED;
+    case DESKROBO_EMOTION_DIZZY:
+      return EMOTION_DIZZY;
+    case DESKROBO_EMOTION_MAIL:
+      return EMOTION_MAIL;
+    case DESKROBO_EMOTION_CALL:
+      return EMOTION_CALL;
+    case DESKROBO_EMOTION_SHAKE:
+      return EMOTION_SHAKE;
     case DESKROBO_EMOTION_IDLE:
-    default: return EMOTION_IDLE;
+    default:
+      return EMOTION_IDLE;
   }
 }
 
 static const char *emotion_name(DeskRoboEmotion emotion) {
   switch (emotion) {
-    case DESKROBO_EMOTION_HAPPY: return "HAPPY";
-    case DESKROBO_EMOTION_SAD: return "SAD";
-    case DESKROBO_EMOTION_ANGRY: return "ANGRY";
-    case DESKROBO_EMOTION_WOW: return "WOW";
-    case DESKROBO_EMOTION_SLEEPY: return "SLEEPY";
-    case DESKROBO_EMOTION_CONFUSED: return "CONFUSED";
-    case DESKROBO_EMOTION_EXCITED: return "EXCITED";
-    case DESKROBO_EMOTION_DIZZY: return "DIZZY";
-    case DESKROBO_EMOTION_MAIL: return "MAIL";
-    case DESKROBO_EMOTION_CALL: return "CALL";
-    case DESKROBO_EMOTION_SHAKE: return "SHAKE";
+    case DESKROBO_EMOTION_HAPPY:
+      return "HAPPY";
+    case DESKROBO_EMOTION_SAD:
+      return "SAD";
+    case DESKROBO_EMOTION_ANGRY:
+      return "ANGRY";
+    case DESKROBO_EMOTION_WOW:
+      return "WOW";
+    case DESKROBO_EMOTION_SLEEPY:
+      return "SLEEPY";
+    case DESKROBO_EMOTION_CONFUSED:
+      return "CONFUSED";
+    case DESKROBO_EMOTION_EXCITED:
+      return "EXCITED";
+    case DESKROBO_EMOTION_DIZZY:
+      return "DIZZY";
+    case DESKROBO_EMOTION_MAIL:
+      return "MAIL";
+    case DESKROBO_EMOTION_CALL:
+      return "CALL";
+    case DESKROBO_EMOTION_SHAKE:
+      return "SHAKE";
     case DESKROBO_EMOTION_IDLE:
-    default: return "IDLE";
+    default:
+      return "IDLE";
   }
 }
 
 static DeskRoboEventRule event_rule(DeskRoboEventType event_type) {
   switch (event_type) {
-    case DESKROBO_EVENT_PC_CALL: return {DESKROBO_EMOTION_CALL, 90, 8000};
-    case DESKROBO_EVENT_PC_TEAMS: return {DESKROBO_EMOTION_CONFUSED, 80, 5000};
-    case DESKROBO_EVENT_PC_MAIL: return {DESKROBO_EMOTION_MAIL, 70, 3500};
-    case DESKROBO_EVENT_MOTION_SHAKE: return {DESKROBO_EMOTION_SHAKE, 60, 2500};
-    case DESKROBO_EVENT_AUDIO_VERY_LOUD: return {DESKROBO_EMOTION_WOW, 50, 1800};
-    case DESKROBO_EVENT_AUDIO_LOUD: return {DESKROBO_EMOTION_ANGRY, 40, 1400};
-    case DESKROBO_EVENT_MOTION_TILT: return {DESKROBO_EMOTION_CONFUSED, 30, 1200};
-    case DESKROBO_EVENT_AUDIO_QUIET: return {DESKROBO_EMOTION_SLEEPY, 10, 1200};
+    case DESKROBO_EVENT_PC_CALL:
+      return {DESKROBO_EMOTION_CALL, 90, 8000};
+    case DESKROBO_EVENT_PC_TEAMS:
+      return {DESKROBO_EMOTION_CONFUSED, 80, 5000};
+    case DESKROBO_EVENT_PC_MAIL:
+      return {DESKROBO_EMOTION_MAIL, 70, 3500};
+    case DESKROBO_EVENT_MOTION_SHAKE:
+      return {DESKROBO_EMOTION_SHAKE, 60, 2500};
+    case DESKROBO_EVENT_AUDIO_VERY_LOUD:
+      return {DESKROBO_EMOTION_WOW, 50, 1800};
+    case DESKROBO_EVENT_AUDIO_LOUD:
+      return {DESKROBO_EMOTION_ANGRY, 40, 1400};
+    case DESKROBO_EVENT_MOTION_TILT:
+      return {DESKROBO_EMOTION_CONFUSED, 30, 1200};
+    case DESKROBO_EVENT_AUDIO_QUIET:
+      return {DESKROBO_EMOTION_SLEEPY, 10, 1200};
     case DESKROBO_EVENT_NONE:
-    default: return {DESKROBO_EMOTION_IDLE, 0, 0};
+    default:
+      return {DESKROBO_EMOTION_IDLE, 0, 0};
   }
 }
 
@@ -168,6 +254,44 @@ static void apply_emotion_style() {
   }
 }
 
+static uint8_t wake_backlight_level() {
+  if (s_backlight_before_sleep > 0) return s_backlight_before_sleep;
+  if (LCD_Backlight > 0) return LCD_Backlight;
+  return DESKROBO_DEFAULT_WAKE_BACKLIGHT;
+}
+
+static void wake_display_from_sleep() {
+  if (!s_display_sleep_off) return;
+  Set_Backlight(wake_backlight_level());
+  s_display_sleep_off = false;
+}
+
+static void apply_ble_disconnect_policy(uint32_t now) {
+  if (s_ble_connected) return;
+
+  if (s_ble_disconnected_since_ms == 0) {
+    s_ble_disconnected_since_ms = now;
+  }
+
+  if (!s_ble_sleep_face_active || s_current_emotion != DESKROBO_EMOTION_SLEEPY ||
+      s_current_priority < 200) {
+    s_eye_pair_active = false;
+    s_current_emotion = DESKROBO_EMOTION_SLEEPY;
+    s_current_priority = 200;
+    s_emotion_expiry_ms = now + DESKROBO_BLE_DISCONNECT_SLEEP_OFF_MS;
+    s_ble_sleep_face_active = true;
+    apply_emotion_style();
+  }
+
+  if (!s_display_sleep_off &&
+      ((now - s_ble_disconnected_since_ms) >= DESKROBO_BLE_DISCONNECT_SLEEP_OFF_MS)) {
+    if (LCD_Backlight > 0) s_backlight_before_sleep = LCD_Backlight;
+    Set_Backlight(0);
+    s_display_sleep_off = true;
+    Serial.println("[MVP] BLE offline timeout reached -> display off");
+  }
+}
+
 void DeskRobo_SetEmotion(DeskRoboEmotion emotion, uint32_t hold_ms) {
   s_eye_pair_active = false;
   s_current_emotion = emotion;
@@ -176,7 +300,8 @@ void DeskRobo_SetEmotion(DeskRoboEmotion emotion, uint32_t hold_ms) {
   apply_emotion_style();
 }
 
-void DeskRobo_SetEyePair(DeskRoboEmotion left, DeskRoboEmotion right, uint32_t hold_ms) {
+void DeskRobo_SetEyePair(DeskRoboEmotion left, DeskRoboEmotion right,
+                         uint32_t hold_ms) {
   s_left_eye_emotion = left;
   s_right_eye_emotion = right;
   s_eye_pair_active = true;
@@ -194,20 +319,19 @@ bool DeskRobo_SetTuning(const char *key, int value) {
   return ok;
 }
 
-String DeskRobo_GetTuningJson() {
-  return s_face.getTuningJson();
-}
+String DeskRobo_GetTuningJson() { return s_face.getTuningJson(); }
 
 bool DeskRobo_SaveTuning() {
   if (!s_prefs.begin("deskrobo", false)) return false;
-  s_prefs.putInt("face_style", (int) s_face_style);
+  s_prefs.putInt("face_style", (int)s_face_style);
   s_prefs.putInt("drift_amp_px", s_face.getTuningValue("drift_amp_px"));
   s_prefs.putInt("saccade_amp_px", s_face.getTuningValue("saccade_amp_px"));
   s_prefs.putInt("saccade_min_ms", s_face.getTuningValue("saccade_min_ms"));
   s_prefs.putInt("saccade_max_ms", s_face.getTuningValue("saccade_max_ms"));
   s_prefs.putInt("blink_interval", s_face.getTuningValue("blink_interval_ms"));
   s_prefs.putInt("blink_duration", s_face.getTuningValue("blink_duration_ms"));
-  s_prefs.putInt("dbl_blink_pct", s_face.getTuningValue("double_blink_chance_pct"));
+  s_prefs.putInt("dbl_blink_pct",
+                 s_face.getTuningValue("double_blink_chance_pct"));
   s_prefs.putInt("glow_pulse_amp", s_face.getTuningValue("glow_pulse_amp"));
   s_prefs.putInt("glow_pulse_ms", s_face.getTuningValue("glow_pulse_period_ms"));
   s_prefs.end();
@@ -216,19 +340,30 @@ bool DeskRobo_SaveTuning() {
 
 bool DeskRobo_LoadTuning() {
   if (!s_prefs.begin("deskrobo", true)) return false;
-  const int face_style = s_prefs.getInt("face_style", (int) DESKROBO_STYLE_EVE);
-  const int drift_amp_px = s_prefs.getInt("drift_amp_px", s_face.getTuningValue("drift_amp_px"));
-  const int saccade_amp_px = s_prefs.getInt("saccade_amp_px", s_face.getTuningValue("saccade_amp_px"));
-  const int saccade_min_ms = s_prefs.getInt("saccade_min_ms", s_face.getTuningValue("saccade_min_ms"));
-  const int saccade_max_ms = s_prefs.getInt("saccade_max_ms", s_face.getTuningValue("saccade_max_ms"));
-  const int blink_interval_ms = s_prefs.getInt("blink_interval", s_face.getTuningValue("blink_interval_ms"));
-  const int blink_duration_ms = s_prefs.getInt("blink_duration", s_face.getTuningValue("blink_duration_ms"));
-  const int double_blink_chance_pct = s_prefs.getInt("dbl_blink_pct", s_face.getTuningValue("double_blink_chance_pct"));
-  const int glow_pulse_amp = s_prefs.getInt("glow_pulse_amp", s_face.getTuningValue("glow_pulse_amp"));
-  const int glow_pulse_period_ms = s_prefs.getInt("glow_pulse_ms", s_face.getTuningValue("glow_pulse_period_ms"));
+  const int face_style = s_prefs.getInt("face_style", (int)DESKROBO_STYLE_EVE);
+  const int drift_amp_px =
+      s_prefs.getInt("drift_amp_px", s_face.getTuningValue("drift_amp_px"));
+  const int saccade_amp_px = s_prefs.getInt(
+      "saccade_amp_px", s_face.getTuningValue("saccade_amp_px"));
+  const int saccade_min_ms = s_prefs.getInt(
+      "saccade_min_ms", s_face.getTuningValue("saccade_min_ms"));
+  const int saccade_max_ms = s_prefs.getInt(
+      "saccade_max_ms", s_face.getTuningValue("saccade_max_ms"));
+  const int blink_interval_ms = s_prefs.getInt(
+      "blink_interval", s_face.getTuningValue("blink_interval_ms"));
+  const int blink_duration_ms = s_prefs.getInt(
+      "blink_duration", s_face.getTuningValue("blink_duration_ms"));
+  const int double_blink_chance_pct = s_prefs.getInt(
+      "dbl_blink_pct", s_face.getTuningValue("double_blink_chance_pct"));
+  const int glow_pulse_amp = s_prefs.getInt(
+      "glow_pulse_amp", s_face.getTuningValue("glow_pulse_amp"));
+  const int glow_pulse_period_ms = s_prefs.getInt(
+      "glow_pulse_ms", s_face.getTuningValue("glow_pulse_period_ms"));
   s_prefs.end();
-  if (face_style == 1 || face_style == (int) DESKROBO_STYLE_EVE) s_face_style = DESKROBO_STYLE_EVE;
-  else s_face_style = DESKROBO_STYLE_EVE;
+  if (face_style == 1 || face_style == (int)DESKROBO_STYLE_EVE)
+    s_face_style = DESKROBO_STYLE_EVE;
+  else
+    s_face_style = DESKROBO_STYLE_EVE;
 
   DeskRobo_SetTuning("drift_amp_px", drift_amp_px);
   DeskRobo_SetTuning("saccade_amp_px", saccade_amp_px);
@@ -251,9 +386,7 @@ bool DeskRobo_SetStyleByName(const char *name) {
   return true;
 }
 
-const char *DeskRobo_GetStyleName() {
-  return style_name(s_face_style);
-}
+const char *DeskRobo_GetStyleName() { return style_name(s_face_style); }
 
 void DeskRobo_SetStatusLabelVisible(bool visible) {
   s_status_label_visible = visible;
@@ -265,11 +398,56 @@ void DeskRobo_SetStatusLabelVisible(bool visible) {
   }
 }
 
-bool DeskRobo_GetStatusLabelVisible() {
-  return s_status_label_visible;
+bool DeskRobo_GetStatusLabelVisible() { return s_status_label_visible; }
+
+void DeskRobo_SetBleConnected(bool connected) {
+  if (s_ble_state_seen && (s_ble_connected == connected)) return;
+
+  s_ble_state_seen = true;
+  s_ble_connected = connected;
+
+  if (connected) {
+    s_ble_disconnected_since_ms = 0;
+    s_ble_sleep_face_active = false;
+    wake_display_from_sleep();
+
+    s_eye_pair_active = false;
+    s_current_emotion = DESKROBO_EMOTION_IDLE;
+    s_current_priority = 0;
+    s_emotion_expiry_ms = 0;
+    apply_emotion_style();
+
+    Serial.println("[MVP] BLE connected -> wake display");
+    return;
+  }
+
+  s_ble_disconnected_since_ms = millis();
+  s_ble_sleep_face_active = false;
+  apply_ble_disconnect_policy(s_ble_disconnected_since_ms);
+  Serial.println("[MVP] BLE disconnected -> sleepy policy active");
 }
 
 void DeskRobo_PushEvent(DeskRoboEventType event_type) {
+  const bool is_motion_wake = (event_type == DESKROBO_EVENT_MOTION_SHAKE) ||
+                              (event_type == DESKROBO_EVENT_MOTION_TILT) ||
+                              (event_type == DESKROBO_EVENT_MOTION_TAP);
+
+  if (!s_ble_connected) {
+    if (is_motion_wake && s_display_sleep_off) {
+      wake_display_from_sleep();
+      s_ble_disconnected_since_ms = millis();
+      s_ble_sleep_face_active = false;
+      apply_ble_disconnect_policy(s_ble_disconnected_since_ms);
+      Serial.println("[MVP] Wake by motion while BLE offline");
+    }
+
+    if (event_type == DESKROBO_EVENT_MOTION_TAP) {
+      s_time_expiry_ms = millis() + 30000;
+      if (s_time_label) lv_obj_clear_flag(s_time_label, LV_OBJ_FLAG_HIDDEN);
+    }
+    return;
+  }
+
   if (event_type == DESKROBO_EVENT_MOTION_TAP) {
     s_time_expiry_ms = millis() + 30000;
     if (s_time_label) lv_obj_clear_flag(s_time_label, LV_OBJ_FLAG_HIDDEN);
@@ -409,18 +587,29 @@ void DeskRobo_Init() {
   s_current_emotion = DESKROBO_EMOTION_IDLE;
   s_current_priority = 0;
   s_emotion_expiry_ms = 0;
+
+  s_ble_connected = false;
+  s_ble_state_seen = false;
+  s_ble_sleep_face_active = false;
+  s_display_sleep_off = false;
+  s_ble_disconnected_since_ms = 0;
+  s_backlight_before_sleep =
+      (LCD_Backlight > 0) ? LCD_Backlight : DESKROBO_DEFAULT_WAKE_BACKLIGHT;
+
   DeskRobo_LoadTuning();
   apply_emotion_style();
 }
 
-DeskRoboEmotion DeskRobo_GetEmotion() {
-  return s_current_emotion;
-}
+DeskRoboEmotion DeskRobo_GetEmotion() { return s_current_emotion; }
 
 void DeskRobo_Loop() {
   const uint32_t now = millis();
 
-  if ((s_current_priority > 0) && (now > s_emotion_expiry_ms)) {
+  if (!s_ble_connected) {
+    apply_ble_disconnect_policy(now);
+  }
+
+  if (s_ble_connected && (s_current_priority > 0) && (now > s_emotion_expiry_ms)) {
     s_eye_pair_active = false;
     s_current_emotion = DESKROBO_EMOTION_IDLE;
     s_current_priority = 0;
@@ -448,7 +637,8 @@ void DeskRobo_Loop() {
       struct tm timeinfo;
       if (getLocalTime(&timeinfo, 10)) {
         if (s_time_label) {
-          lv_label_set_text_fmt(s_time_label, "%02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+          lv_label_set_text_fmt(s_time_label, "%02d:%02d:%02d", timeinfo.tm_hour,
+                                timeinfo.tm_min, timeinfo.tm_sec);
           lv_obj_move_foreground(s_time_label);
         }
       } else {

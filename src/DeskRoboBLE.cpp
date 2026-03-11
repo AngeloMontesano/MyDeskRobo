@@ -17,6 +17,8 @@ constexpr const char *kIoCharUuid = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 bool g_device_connected = false;
 QueueHandle_t g_cmd_queue = nullptr;
 BLECharacteristic *g_io_char = nullptr;
+bool g_conn_state_initialized = false;
+bool g_last_conn_state = false;
 
 enum CmdType : uint8_t {
   CMD_NONE = 0,
@@ -317,5 +319,14 @@ void DeskRoboBLE_Loop() {
         break;
     }
   }
+
+  if (!g_conn_state_initialized || (g_last_conn_state != g_device_connected)) {
+    g_conn_state_initialized = true;
+    g_last_conn_state = g_device_connected;
+    DeskRobo_SetBleConnected(g_device_connected);
+  }
 }
+
+
+
 
