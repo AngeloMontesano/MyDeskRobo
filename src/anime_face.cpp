@@ -263,12 +263,6 @@ void AnimeFace::drawEye(int16_t cx, int16_t cy, Emotion e, bool isRight, bool bl
       }
       break;
   }
-
-  w += extra_w;
-  h += extra_h;
-  cx += extra_x;
-  cy += extra_y;
-  if (force_no_shadow) add_side_shadow = false;
   if (w < 10) w = 10;
   if (h < 6) h = 6;
 
