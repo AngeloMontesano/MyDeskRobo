@@ -36,8 +36,6 @@ small{opacity:.8}
 <div class=card><h3>Eye Style</h3>
 <div class=grid>
 <button onclick="setStyle('EVE')">EVE (WALL-E)</button>
-<button onclick="setStyle('ESP32_EYES')">ESP32 Eyes</button>
-<button onclick="setStyle('ROBO_TEST')">RoboEyes Test</button>
 </div>
 <small>Style wirkt sofort. Optional mit Save Tune persistent speichern.</small>
 </div>
@@ -93,8 +91,7 @@ small{opacity:.8}
 <div class=card><h3>OTA</h3><input type=file id=f><button onclick=ota()>Upload Firmware</button><div id=otaState></div></div>
 </div>
 <script>
-const emos=['IDLE','HAPPY','SAD','ANGRY','ANGST','WOW','SLEEPY','LOVE','CONFUSED','EXCITED','ANRUF','LAUT','MAIL','DENKEN','WINK','GLITCH','LOCKED','WIFI',
-'NORMAL','TIRED','GLEE','WORRIED','FOCUSED','ANNOYED','SURPRISED','SKEPTIC','FRUSTRATED','UNIMPRESSED','SUSPICIOUS','SQUINT','FURIOUS','SCARED','AWE'];
+const emos=['IDLE','HAPPY','SAD','ANGRY','WOW','SLEEPY','CONFUSED','EXCITED'];
 const box=document.getElementById('emo');
 const leftSel=document.getElementById('leftEye');
 const rightSel=document.getElementById('rightEye');
@@ -157,35 +154,10 @@ bool parseEmotion(const String &name, DeskRoboEmotion &out) {
   else if (name == "HAPPY") out = DESKROBO_EMOTION_HAPPY;
   else if (name == "SAD") out = DESKROBO_EMOTION_SAD;
   else if (name == "ANGRY") out = DESKROBO_EMOTION_ANGRY;
-  else if (name == "ANGST") out = DESKROBO_EMOTION_ANGST;
   else if (name == "WOW") out = DESKROBO_EMOTION_WOW;
   else if (name == "SLEEPY") out = DESKROBO_EMOTION_SLEEPY;
-  else if (name == "LOVE") out = DESKROBO_EMOTION_LOVE;
   else if (name == "CONFUSED") out = DESKROBO_EMOTION_CONFUSED;
   else if (name == "EXCITED") out = DESKROBO_EMOTION_EXCITED;
-  else if (name == "ANRUF") out = DESKROBO_EMOTION_ANRUF;
-  else if (name == "LAUT") out = DESKROBO_EMOTION_LAUT;
-  else if (name == "MAIL") out = DESKROBO_EMOTION_MAIL;
-  else if (name == "DENKEN") out = DESKROBO_EMOTION_DENKEN;
-  else if (name == "WINK") out = DESKROBO_EMOTION_WINK;
-  else if (name == "GLITCH") out = DESKROBO_EMOTION_GLITCH;
-  else if (name == "LOCKED") out = DESKROBO_EMOTION_LOCKED;
-  else if (name == "WIFI") out = DESKROBO_EMOTION_WIFI;
-  else if (name == "NORMAL") out = DESKROBO_EMOTION_ESP_NORMAL;
-  else if (name == "TIRED") out = DESKROBO_EMOTION_ESP_TIRED;
-  else if (name == "GLEE") out = DESKROBO_EMOTION_ESP_GLEE;
-  else if (name == "WORRIED") out = DESKROBO_EMOTION_ESP_WORRIED;
-  else if (name == "FOCUSED") out = DESKROBO_EMOTION_ESP_FOCUSED;
-  else if (name == "ANNOYED") out = DESKROBO_EMOTION_ESP_ANNOYED;
-  else if (name == "SURPRISED") out = DESKROBO_EMOTION_ESP_SURPRISED;
-  else if (name == "SKEPTIC") out = DESKROBO_EMOTION_ESP_SKEPTIC;
-  else if (name == "FRUSTRATED") out = DESKROBO_EMOTION_ESP_FRUSTRATED;
-  else if (name == "UNIMPRESSED") out = DESKROBO_EMOTION_ESP_UNIMPRESSED;
-  else if (name == "SUSPICIOUS") out = DESKROBO_EMOTION_ESP_SUSPICIOUS;
-  else if (name == "SQUINT") out = DESKROBO_EMOTION_ESP_SQUINT;
-  else if (name == "FURIOUS") out = DESKROBO_EMOTION_ESP_FURIOUS;
-  else if (name == "SCARED") out = DESKROBO_EMOTION_ESP_SCARED;
-  else if (name == "AWE") out = DESKROBO_EMOTION_ESP_AWE;
   else return false;
   return true;
 }
@@ -208,35 +180,10 @@ const char *emotionToName(DeskRoboEmotion e) {
     case DESKROBO_EMOTION_HAPPY: return "HAPPY";
     case DESKROBO_EMOTION_SAD: return "SAD";
     case DESKROBO_EMOTION_ANGRY: return "ANGRY";
-    case DESKROBO_EMOTION_ANGST: return "ANGST";
     case DESKROBO_EMOTION_WOW: return "WOW";
     case DESKROBO_EMOTION_SLEEPY: return "SLEEPY";
-    case DESKROBO_EMOTION_LOVE: return "LOVE";
     case DESKROBO_EMOTION_CONFUSED: return "CONFUSED";
     case DESKROBO_EMOTION_EXCITED: return "EXCITED";
-    case DESKROBO_EMOTION_ANRUF: return "ANRUF";
-    case DESKROBO_EMOTION_LAUT: return "LAUT";
-    case DESKROBO_EMOTION_MAIL: return "MAIL";
-    case DESKROBO_EMOTION_DENKEN: return "DENKEN";
-    case DESKROBO_EMOTION_WINK: return "WINK";
-    case DESKROBO_EMOTION_GLITCH: return "GLITCH";
-    case DESKROBO_EMOTION_LOCKED: return "LOCKED";
-    case DESKROBO_EMOTION_WIFI: return "WIFI";
-    case DESKROBO_EMOTION_ESP_NORMAL: return "NORMAL";
-    case DESKROBO_EMOTION_ESP_TIRED: return "TIRED";
-    case DESKROBO_EMOTION_ESP_GLEE: return "GLEE";
-    case DESKROBO_EMOTION_ESP_WORRIED: return "WORRIED";
-    case DESKROBO_EMOTION_ESP_FOCUSED: return "FOCUSED";
-    case DESKROBO_EMOTION_ESP_ANNOYED: return "ANNOYED";
-    case DESKROBO_EMOTION_ESP_SURPRISED: return "SURPRISED";
-    case DESKROBO_EMOTION_ESP_SKEPTIC: return "SKEPTIC";
-    case DESKROBO_EMOTION_ESP_FRUSTRATED: return "FRUSTRATED";
-    case DESKROBO_EMOTION_ESP_UNIMPRESSED: return "UNIMPRESSED";
-    case DESKROBO_EMOTION_ESP_SUSPICIOUS: return "SUSPICIOUS";
-    case DESKROBO_EMOTION_ESP_SQUINT: return "SQUINT";
-    case DESKROBO_EMOTION_ESP_FURIOUS: return "FURIOUS";
-    case DESKROBO_EMOTION_ESP_SCARED: return "SCARED";
-    case DESKROBO_EMOTION_ESP_AWE: return "AWE";
     case DESKROBO_EMOTION_IDLE:
     default: return "IDLE";
   }

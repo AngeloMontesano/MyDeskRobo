@@ -55,34 +55,15 @@ static Preferences s_prefs;
 static DeskRoboFaceStyle s_face_style = DESKROBO_STYLE_EVE;
 
 static FaceStyle to_face_style(DeskRoboFaceStyle style) {
-  if (style == DESKROBO_STYLE_ROBO) return FACE_STYLE_ROBO;
-  if (style == DESKROBO_STYLE_PLAYFUL) return FACE_STYLE_PLAYFUL;
   return FACE_STYLE_EVE;
 }
 
 static const char *style_name(DeskRoboFaceStyle style) {
-  if (style == DESKROBO_STYLE_ROBO) return "ROBO_TEST";
-  if (style == DESKROBO_STYLE_PLAYFUL) return "ESP32_EYES";
   return "EVE";
 }
 
 static bool parse_style_name(const char *name, DeskRoboFaceStyle &out) {
   if (!name) return false;
-  if ((strcmp(name, "PLAYFUL") == 0) || (strcmp(name, "playful") == 0) ||
-      (strcmp(name, "ESP32") == 0) || (strcmp(name, "esp32") == 0) ||
-      (strcmp(name, "ESP32_EYES") == 0) || (strcmp(name, "esp32_eyes") == 0) ||
-      (strcmp(name, "CLASSIC") == 0) || (strcmp(name, "classic") == 0) ||
-      (strcmp(name, "WALLE") == 0) || (strcmp(name, "walle") == 0) ||
-      (strcmp(name, "WALL_E") == 0) || (strcmp(name, "wall_e") == 0)) {
-    out = DESKROBO_STYLE_PLAYFUL;
-    return true;
-  }
-  if ((strcmp(name, "ROBO") == 0) || (strcmp(name, "robo") == 0) ||
-      (strcmp(name, "ROBO_TEST") == 0) || (strcmp(name, "robo_test") == 0) ||
-      (strcmp(name, "ROBOEYES") == 0) || (strcmp(name, "roboeyes") == 0)) {
-    out = DESKROBO_STYLE_ROBO;
-    return true;
-  }
   if ((strcmp(name, "EVE") == 0) || (strcmp(name, "eve") == 0) ||
       (strcmp(name, "EVE_CINEMATIC") == 0) || (strcmp(name, "eve_cinematic") == 0)) {
     out = DESKROBO_STYLE_EVE;
@@ -96,35 +77,10 @@ static Emotion to_anime(DeskRoboEmotion emotion) {
     case DESKROBO_EMOTION_HAPPY: return EMOTION_HAPPY;
     case DESKROBO_EMOTION_SAD: return EMOTION_SAD;
     case DESKROBO_EMOTION_ANGRY: return EMOTION_ANGRY;
-    case DESKROBO_EMOTION_ANGST: return EMOTION_ANGST;
     case DESKROBO_EMOTION_WOW: return EMOTION_WOW;
     case DESKROBO_EMOTION_SLEEPY: return EMOTION_SLEEPY;
-    case DESKROBO_EMOTION_LOVE: return EMOTION_LOVE;
     case DESKROBO_EMOTION_CONFUSED: return EMOTION_CONFUSED;
     case DESKROBO_EMOTION_EXCITED: return EMOTION_EXCITED;
-    case DESKROBO_EMOTION_ANRUF: return EMOTION_ANRUF;
-    case DESKROBO_EMOTION_LAUT: return EMOTION_LAUT;
-    case DESKROBO_EMOTION_MAIL: return EMOTION_MAIL;
-    case DESKROBO_EMOTION_DENKEN: return EMOTION_DENKEN;
-    case DESKROBO_EMOTION_WINK: return EMOTION_WINK;
-    case DESKROBO_EMOTION_GLITCH: return EMOTION_GLITCH;
-    case DESKROBO_EMOTION_LOCKED: return EMOTION_LOCKED;
-    case DESKROBO_EMOTION_WIFI: return EMOTION_WIFI;
-    case DESKROBO_EMOTION_ESP_NORMAL: return EMOTION_ESP_NORMAL;
-    case DESKROBO_EMOTION_ESP_TIRED: return EMOTION_ESP_TIRED;
-    case DESKROBO_EMOTION_ESP_GLEE: return EMOTION_ESP_GLEE;
-    case DESKROBO_EMOTION_ESP_WORRIED: return EMOTION_ESP_WORRIED;
-    case DESKROBO_EMOTION_ESP_FOCUSED: return EMOTION_ESP_FOCUSED;
-    case DESKROBO_EMOTION_ESP_ANNOYED: return EMOTION_ESP_ANNOYED;
-    case DESKROBO_EMOTION_ESP_SURPRISED: return EMOTION_ESP_SURPRISED;
-    case DESKROBO_EMOTION_ESP_SKEPTIC: return EMOTION_ESP_SKEPTIC;
-    case DESKROBO_EMOTION_ESP_FRUSTRATED: return EMOTION_ESP_FRUSTRATED;
-    case DESKROBO_EMOTION_ESP_UNIMPRESSED: return EMOTION_ESP_UNIMPRESSED;
-    case DESKROBO_EMOTION_ESP_SUSPICIOUS: return EMOTION_ESP_SUSPICIOUS;
-    case DESKROBO_EMOTION_ESP_SQUINT: return EMOTION_ESP_SQUINT;
-    case DESKROBO_EMOTION_ESP_FURIOUS: return EMOTION_ESP_FURIOUS;
-    case DESKROBO_EMOTION_ESP_SCARED: return EMOTION_ESP_SCARED;
-    case DESKROBO_EMOTION_ESP_AWE: return EMOTION_ESP_AWE;
     case DESKROBO_EMOTION_IDLE:
     default: return EMOTION_IDLE;
   }
@@ -135,35 +91,10 @@ static const char *emotion_name(DeskRoboEmotion emotion) {
     case DESKROBO_EMOTION_HAPPY: return "HAPPY";
     case DESKROBO_EMOTION_SAD: return "SAD";
     case DESKROBO_EMOTION_ANGRY: return "ANGRY";
-    case DESKROBO_EMOTION_ANGST: return "ANGST";
     case DESKROBO_EMOTION_WOW: return "WOW";
     case DESKROBO_EMOTION_SLEEPY: return "SLEEPY";
-    case DESKROBO_EMOTION_LOVE: return "LOVE";
     case DESKROBO_EMOTION_CONFUSED: return "CONFUSED";
     case DESKROBO_EMOTION_EXCITED: return "EXCITED";
-    case DESKROBO_EMOTION_ANRUF: return "ANRUF";
-    case DESKROBO_EMOTION_LAUT: return "LAUT";
-    case DESKROBO_EMOTION_MAIL: return "MAIL";
-    case DESKROBO_EMOTION_DENKEN: return "DENKEN";
-    case DESKROBO_EMOTION_WINK: return "WINK";
-    case DESKROBO_EMOTION_GLITCH: return "GLITCH";
-    case DESKROBO_EMOTION_LOCKED: return "LOCKED";
-    case DESKROBO_EMOTION_WIFI: return "WIFI";
-    case DESKROBO_EMOTION_ESP_NORMAL: return "NORMAL";
-    case DESKROBO_EMOTION_ESP_TIRED: return "TIRED";
-    case DESKROBO_EMOTION_ESP_GLEE: return "GLEE";
-    case DESKROBO_EMOTION_ESP_WORRIED: return "WORRIED";
-    case DESKROBO_EMOTION_ESP_FOCUSED: return "FOCUSED";
-    case DESKROBO_EMOTION_ESP_ANNOYED: return "ANNOYED";
-    case DESKROBO_EMOTION_ESP_SURPRISED: return "SURPRISED";
-    case DESKROBO_EMOTION_ESP_SKEPTIC: return "SKEPTIC";
-    case DESKROBO_EMOTION_ESP_FRUSTRATED: return "FRUSTRATED";
-    case DESKROBO_EMOTION_ESP_UNIMPRESSED: return "UNIMPRESSED";
-    case DESKROBO_EMOTION_ESP_SUSPICIOUS: return "SUSPICIOUS";
-    case DESKROBO_EMOTION_ESP_SQUINT: return "SQUINT";
-    case DESKROBO_EMOTION_ESP_FURIOUS: return "FURIOUS";
-    case DESKROBO_EMOTION_ESP_SCARED: return "SCARED";
-    case DESKROBO_EMOTION_ESP_AWE: return "AWE";
     case DESKROBO_EMOTION_IDLE:
     default: return "IDLE";
   }
@@ -171,12 +102,12 @@ static const char *emotion_name(DeskRoboEmotion emotion) {
 
 static DeskRoboEventRule event_rule(DeskRoboEventType event_type) {
   switch (event_type) {
-    case DESKROBO_EVENT_PC_CALL: return {DESKROBO_EMOTION_ANRUF, 90, 8000};
-    case DESKROBO_EVENT_PC_TEAMS: return {DESKROBO_EMOTION_DENKEN, 80, 5000};
-    case DESKROBO_EVENT_PC_MAIL: return {DESKROBO_EMOTION_MAIL, 70, 3500};
+    case DESKROBO_EVENT_PC_CALL: return {DESKROBO_EMOTION_EXCITED, 90, 8000};
+    case DESKROBO_EVENT_PC_TEAMS: return {DESKROBO_EMOTION_CONFUSED, 80, 5000};
+    case DESKROBO_EVENT_PC_MAIL: return {DESKROBO_EMOTION_HAPPY, 70, 3500};
     case DESKROBO_EVENT_MOTION_SHAKE: return {DESKROBO_EMOTION_EXCITED, 60, 1200};
     case DESKROBO_EVENT_AUDIO_VERY_LOUD: return {DESKROBO_EMOTION_WOW, 50, 1800};
-    case DESKROBO_EVENT_AUDIO_LOUD: return {DESKROBO_EMOTION_LAUT, 40, 1400};
+    case DESKROBO_EVENT_AUDIO_LOUD: return {DESKROBO_EMOTION_ANGRY, 40, 1400};
     case DESKROBO_EVENT_MOTION_TILT: return {DESKROBO_EMOTION_CONFUSED, 30, 1200};
     case DESKROBO_EVENT_AUDIO_QUIET: return {DESKROBO_EMOTION_SLEEPY, 10, 1200};
     case DESKROBO_EVENT_NONE:
@@ -254,9 +185,7 @@ bool DeskRobo_LoadTuning() {
   const int glow_pulse_amp = s_prefs.getInt("glow_pulse_amp", s_face.getTuningValue("glow_pulse_amp"));
   const int glow_pulse_period_ms = s_prefs.getInt("glow_pulse_ms", s_face.getTuningValue("glow_pulse_period_ms"));
   s_prefs.end();
-  if (face_style == (int) DESKROBO_STYLE_ROBO) s_face_style = DESKROBO_STYLE_ROBO;
-  else if (face_style == 1 || face_style == (int) DESKROBO_STYLE_EVE) s_face_style = DESKROBO_STYLE_EVE;
-  else if (face_style == 0 || face_style == 2 || face_style == (int) DESKROBO_STYLE_PLAYFUL) s_face_style = DESKROBO_STYLE_PLAYFUL;
+  if (face_style == 1 || face_style == (int) DESKROBO_STYLE_EVE) s_face_style = DESKROBO_STYLE_EVE;
   else s_face_style = DESKROBO_STYLE_EVE;
 
   DeskRobo_SetTuning("drift_amp_px", drift_amp_px);
