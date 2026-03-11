@@ -7,6 +7,7 @@
 #include "LVGL_Arduino/Gyro_QMI8658.h"
 #include "LVGL_Arduino/SD_Card.h"
 #include "LVGL_Arduino/BAT_Driver.h"
+#include "LVGL_Arduino/RTC_PCF85063.h"
 
 #include "DeskRoboMVP.h"
 #include "DeskRoboWeb.h"
@@ -55,6 +56,8 @@ void setup() {
   Serial.println("[BOOT] I2C init done");
   TCA9554PWR_Init(0x00);
   Serial.println("[BOOT] EXIO init done");
+  PCF85063_Init();
+  Serial.println("[BOOT] RTC init done");
   BAT_Init();
   Serial.println("[BOOT] BAT init done");
   SD_Init();

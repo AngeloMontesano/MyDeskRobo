@@ -190,6 +190,7 @@ void AnimeFace::drawEye(int16_t cx, int16_t cy, Emotion e, bool isRight, bool bl
   bool carve_bottom = false;
   int16_t carve_bottom_h = 0;
   bool add_side_shadow = true;
+  int16_t angle = 0;
   const lv_color_t bg = lv_color_hex(0x06080D);
   const uint8_t idle_phase = (uint8_t) ((millis() / 2400U) % 4U);
 
@@ -209,17 +210,13 @@ void AnimeFace::drawEye(int16_t cx, int16_t cy, Emotion e, bool isRight, bool bl
       h = blink ? h : 80;
       w = 56;
       cy += 15;
-      carve_top = !blink;
-      carve_h = 35;
-      carve_dx = isRight ? 25 : -25;
+      angle = isRight ? 200 : -200;
       break;
     case EMOTION_ANGRY:
       h = blink ? h : 80;
       w = 56;
       cy += 5;
-      carve_top = !blink;
-      carve_h = 35;
-      carve_dx = isRight ? -25 : 25;
+      angle = isRight ? -200 : 200;
       break;
     case EMOTION_WOW:
       w = 66;
@@ -230,6 +227,16 @@ void AnimeFace::drawEye(int16_t cx, int16_t cy, Emotion e, bool isRight, bool bl
       w = 56;
       cy += 35;
       add_side_shadow = false;
+      break;
+    case EMOTION_DIZZY:
+      h = blink ? h : 50;
+      w = 50;
+      if (!blink) {
+        inner_clip = true;
+        clip_w = 40;
+        cx += isRight ? -10 : 10;
+        cy += (millis() / 50) % 20 < 10 ? -5 : 5; // swirly effect
+      }
       break;
     case EMOTION_CONFUSED:
       w = 56;
@@ -286,6 +293,7 @@ void AnimeFace::drawEye(int16_t cx, int16_t cy, Emotion e, bool isRight, bool bl
   lv_obj_set_style_radius(glow, eye_radius, 0);
   lv_obj_set_style_bg_color(glow, color, 0);
   lv_obj_set_style_bg_opa(glow, (lv_opa_t) constrain(glow_base + pulse_shift_ / 4, 6, glow_hi), 0);
+  if (angle != 0) lv_obj_set_style_transform_angle(glow, angle, 0);
 
   lv_obj_t *mid = lv_obj_create(canvas_);
   lv_obj_remove_style_all(mid);
@@ -294,6 +302,7 @@ void AnimeFace::drawEye(int16_t cx, int16_t cy, Emotion e, bool isRight, bool bl
   lv_obj_set_style_radius(mid, eye_radius, 0);
   lv_obj_set_style_bg_color(mid, color, 0);
   lv_obj_set_style_bg_opa(mid, (lv_opa_t) constrain(mid_base + pulse_shift_ / 4, 24, mid_hi), 0);
+  if (angle != 0) lv_obj_set_style_transform_angle(mid, angle, 0);
 
   lv_obj_t *core = lv_obj_create(canvas_);
   lv_obj_remove_style_all(core);
@@ -302,6 +311,7 @@ void AnimeFace::drawEye(int16_t cx, int16_t cy, Emotion e, bool isRight, bool bl
   lv_obj_set_style_radius(core, eye_radius, 0);
   lv_obj_set_style_bg_color(core, color, 0);
   lv_obj_set_style_bg_opa(core, LV_OPA_COVER, 0);
+  if (angle != 0) lv_obj_set_style_transform_angle(core, angle, 0);
 
   if (carve_top && (carve_h > 0)) {
     lv_obj_t *cut = lv_obj_create(canvas_);

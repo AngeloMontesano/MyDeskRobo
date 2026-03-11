@@ -6,6 +6,7 @@
 #include <Preferences.h>
 
 #include "LVGL_Arduino/Gyro_QMI8658.h"
+
 #include "anime_face.h"
 
 #ifndef DESKROBO_ENABLE_GYRO
@@ -34,6 +35,7 @@ typedef struct {
 static AnimeFace s_face;
 static lv_obj_t *s_status = nullptr;
 static lv_obj_t *s_motion_debug = nullptr;
+static lv_obj_t *s_time_label = nullptr;
 
 static DeskRoboEmotion s_current_emotion = DESKROBO_EMOTION_IDLE;
 static uint8_t s_current_priority = 0;
@@ -42,6 +44,7 @@ static bool s_eye_pair_active = false;
 static DeskRoboEmotion s_left_eye_emotion = DESKROBO_EMOTION_IDLE;
 static DeskRoboEmotion s_right_eye_emotion = DESKROBO_EMOTION_IDLE;
 static uint32_t s_eye_pair_expiry_ms = 0;
+static uint32_t s_time_expiry_ms = 0;
 
 static uint32_t s_last_sensor_ms = 0;
 static uint32_t s_last_motion_ms = 0;
@@ -81,6 +84,7 @@ static Emotion to_anime(DeskRoboEmotion emotion) {
     case DESKROBO_EMOTION_SLEEPY: return EMOTION_SLEEPY;
     case DESKROBO_EMOTION_CONFUSED: return EMOTION_CONFUSED;
     case DESKROBO_EMOTION_EXCITED: return EMOTION_EXCITED;
+    case DESKROBO_EMOTION_DIZZY: return EMOTION_DIZZY;
     case DESKROBO_EMOTION_IDLE:
     default: return EMOTION_IDLE;
   }
@@ -105,7 +109,7 @@ static DeskRoboEventRule event_rule(DeskRoboEventType event_type) {
     case DESKROBO_EVENT_PC_CALL: return {DESKROBO_EMOTION_EXCITED, 90, 8000};
     case DESKROBO_EVENT_PC_TEAMS: return {DESKROBO_EMOTION_CONFUSED, 80, 5000};
     case DESKROBO_EVENT_PC_MAIL: return {DESKROBO_EMOTION_HAPPY, 70, 3500};
-    case DESKROBO_EVENT_MOTION_SHAKE: return {DESKROBO_EMOTION_EXCITED, 60, 1200};
+    case DESKROBO_EVENT_MOTION_SHAKE: return {DESKROBO_EMOTION_DIZZY, 60, 2500};
     case DESKROBO_EVENT_AUDIO_VERY_LOUD: return {DESKROBO_EMOTION_WOW, 50, 1800};
     case DESKROBO_EVENT_AUDIO_LOUD: return {DESKROBO_EMOTION_ANGRY, 40, 1400};
     case DESKROBO_EVENT_MOTION_TILT: return {DESKROBO_EMOTION_CONFUSED, 30, 1200};
@@ -214,6 +218,12 @@ const char *DeskRobo_GetStyleName() {
 }
 
 void DeskRobo_PushEvent(DeskRoboEventType event_type) {
+  if (event_type == DESKROBO_EVENT_MOTION_TAP) {
+    s_time_expiry_ms = millis() + 30000;
+    if (s_time_label) lv_obj_clear_flag(s_time_label, LV_OBJ_FLAG_HIDDEN);
+    return;
+  }
+
   const DeskRoboEventRule rule = event_rule(event_type);
   if ((rule.priority < s_current_priority) && (millis() < s_emotion_expiry_ms)) {
     return;
@@ -281,12 +291,21 @@ static void read_motion_sensor() {
 #endif
   }
 
-  // Shake: sudden acceleration change.
   if ((jerk > 1.80f) && ((now - s_last_shake_event_ms) > 2000)) {
     s_last_shake_event_ms = now;
     s_last_motion_event = "shake";
 #if DESKROBO_GYRO_EVENTS
     DeskRobo_PushEvent(DESKROBO_EVENT_MOTION_SHAKE);
+#endif
+  }
+
+  // Tap: sudden acceleration change but not quite a shake.
+  static uint32_t s_last_tap_event_ms = 0;
+  if ((jerk > 0.80f && jerk < 2.0f) && ((now - s_last_tap_event_ms) > 500) && ((now - s_last_shake_event_ms) > 1000)) {
+    s_last_tap_event_ms = now;
+    s_last_motion_event = "tap";
+#if DESKROBO_GYRO_EVENTS
+    DeskRobo_PushEvent(DESKROBO_EVENT_MOTION_TAP);
 #endif
   }
 
@@ -321,6 +340,12 @@ void DeskRobo_Init() {
   s_status = lv_label_create(lv_scr_act());
   lv_obj_set_style_text_color(s_status, lv_color_hex(0x8A8F99), 0);
   lv_obj_align(s_status, LV_ALIGN_BOTTOM_MID, 0, -14);
+
+  s_time_label = lv_label_create(lv_scr_act());
+  lv_obj_set_style_text_color(s_time_label, lv_color_hex(0xFFFFFF), 0);
+  lv_obj_set_style_text_font(s_time_label, &lv_font_montserrat_16, 0);
+  lv_obj_align(s_time_label, LV_ALIGN_CENTER, 0, -60);
+  lv_obj_add_flag(s_time_label, LV_OBJ_FLAG_HIDDEN);
 
 #if DESKROBO_SHOW_DEBUG
   s_motion_debug = lv_label_create(lv_scr_act());
@@ -359,6 +384,28 @@ void DeskRobo_Loop() {
   if ((now - s_last_motion_ms) >= 90) {
     s_last_motion_ms = now;
     read_motion_sensor();
+  }
+
+  static uint32_t last_time_update = 0;
+  if ((s_time_expiry_ms > 0) && (now - last_time_update >= 1000)) {
+    last_time_update = now;
+    if (now > s_time_expiry_ms) {
+      if (s_time_label) lv_obj_add_flag(s_time_label, LV_OBJ_FLAG_HIDDEN);
+      s_time_expiry_ms = 0;
+    } else {
+      struct tm timeinfo;
+      if (getLocalTime(&timeinfo, 10)) {
+        if (s_time_label) {
+          lv_label_set_text_fmt(s_time_label, "%02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+          lv_obj_move_foreground(s_time_label);
+        }
+      } else {
+        if (s_time_label) {
+          lv_label_set_text(s_time_label, "No Sync");
+          lv_obj_move_foreground(s_time_label);
+        }
+      }
+    }
   }
 
   s_face.update();

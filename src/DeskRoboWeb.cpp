@@ -345,10 +345,15 @@ void handleRoutes() {
 }  // namespace
 
 void DeskRoboWeb_Init() {
-  WiFi.mode(WIFI_AP);
+  WiFi.mode(WIFI_AP_STA);
   WiFi.setSleep(false);
   WiFi.softAP(kApSsid);
   Serial.printf("[WEB] AP started: %s IP=%s\n", kApSsid, WiFi.softAPIP().toString().c_str());
+
+  WiFi.begin("home", "mon015146659541");
+  Serial.printf("[WEB] Connecting to home wlan for time sync...\n");
+
+  configTime(3600, 3600, "pool.ntp.org", "time.nist.gov");
 
   handleRoutes();
   server.begin();
