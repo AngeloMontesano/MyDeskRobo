@@ -1,18 +1,18 @@
 #include <Arduino.h>
 
-#include "LVGL_Arduino/I2C_Driver.h"
-#include "LVGL_Arduino/TCA9554PWR.h"
-#include "LVGL_Arduino/Display_ST77916.h"
-#include "LVGL_Arduino/LVGL_Driver.h"
-#include "LVGL_Arduino/Gyro_QMI8658.h"
-#include "LVGL_Arduino/SD_Card.h"
 #include "LVGL_Arduino/BAT_Driver.h"
+#include "LVGL_Arduino/Display_ST77916.h"
+#include "LVGL_Arduino/Gyro_QMI8658.h"
+#include "LVGL_Arduino/I2C_Driver.h"
+#include "LVGL_Arduino/LVGL_Driver.h"
 #include "LVGL_Arduino/RTC_PCF85063.h"
+#include "LVGL_Arduino/SD_Card.h"
+#include "LVGL_Arduino/TCA9554PWR.h"
 
+#include "DeskRoboAudio.h"
+#include "DeskRoboBLE.h"
 #include "DeskRoboMVP.h"
 #include "DeskRoboWeb.h"
-#include "DeskRoboBLE.h"
-#include "DeskRoboAudio.h"
 
 #ifndef DESKROBO_ENABLE_GYRO
 #define DESKROBO_ENABLE_GYRO 0
@@ -32,13 +32,15 @@ static void Gyro_SafeProbe() {
     const uint8_t addr = addrs[i];
     const bool who_ok = !I2C_Read(addr, QMI8658_WHO_AM_I, &who, 1);
     const bool rev_ok = !I2C_Read(addr, QMI8658_REVISION_ID, &rev, 1);
-    Serial.printf("[GYRO] addr=0x%02X who_ok=%d who=0x%02X rev_ok=%d rev=0x%02X\n",
-                  addr, who_ok ? 1 : 0, who, rev_ok ? 1 : 0, rev);
+    Serial.printf(
+        "[GYRO] addr=0x%02X who_ok=%d who=0x%02X rev_ok=%d rev=0x%02X\n", addr,
+        who_ok ? 1 : 0, who, rev_ok ? 1 : 0, rev);
     if (who_ok && (who != 0x00) && (who != 0xFF)) {
       found = true;
     }
   }
-  Serial.printf("[GYRO] safe probe result: %s\n", found ? "sensor found" : "not found");
+  Serial.printf("[GYRO] safe probe result: %s\n",
+                found ? "sensor found" : "not found");
 }
 
 void setup() {
@@ -73,7 +75,7 @@ void setup() {
   Serial.println("[BOOT] Gyro init skipped");
 #endif
   Backlight_Init();
-  Set_Backlight(65);
+  Set_Backlight(15);
   Serial.println("[BOOT] backlight set");
   LCD_Init();
   Serial.println("[BOOT] LCD init done");

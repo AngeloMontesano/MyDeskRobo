@@ -14,7 +14,7 @@
 #endif
 
 #ifndef DESKROBO_GYRO_EVENTS
-#define DESKROBO_GYRO_EVENTS 0
+#define DESKROBO_GYRO_EVENTS 1
 #endif
 
 #ifndef DESKROBO_SHOW_DEBUG
@@ -291,7 +291,7 @@ static void read_motion_sensor() {
 #endif
   }
 
-  if ((jerk > 1.80f) && ((now - s_last_shake_event_ms) > 2000)) {
+  if ((jerk > 1.40f) && ((now - s_last_shake_event_ms) > 2000)) {
     s_last_shake_event_ms = now;
     s_last_motion_event = "shake";
 #if DESKROBO_GYRO_EVENTS
@@ -301,7 +301,7 @@ static void read_motion_sensor() {
 
   // Tap: sudden acceleration change but not quite a shake.
   static uint32_t s_last_tap_event_ms = 0;
-  if ((jerk > 0.80f && jerk < 2.0f) && ((now - s_last_tap_event_ms) > 500) && ((now - s_last_shake_event_ms) > 1000)) {
+  if ((jerk > 0.50f && jerk < 1.6f) && ((now - s_last_tap_event_ms) > 500) && ((now - s_last_shake_event_ms) > 1000)) {
     s_last_tap_event_ms = now;
     s_last_motion_event = "tap";
 #if DESKROBO_GYRO_EVENTS
