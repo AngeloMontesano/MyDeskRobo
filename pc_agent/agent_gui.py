@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import queue
 import threading
 import tkinter as tk
@@ -25,7 +25,7 @@ EMOTIONS = [
 
 EVENTS = ["CALL", "MAIL", "TEAMS", "LOUD", "VERY_LOUD", "TILT", "SHAKE", "QUIET"]
 
-STYLES = ["EVE_SUBTLE", "EVE_CINEMATIC", "EVE_COMIC", "ROUND"]
+STYLES = ["EVE_CINEMATIC"]
 
 TUNE_KEYS = [
     "drift_amp_px",

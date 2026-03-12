@@ -145,18 +145,6 @@ bool parseStyleCode(const String &name, uint8_t &out) {
     out = (uint8_t)DESKROBO_STYLE_EVE;
     return true;
   }
-  if (name == "EVE_SUBTLE") {
-    out = (uint8_t)DESKROBO_STYLE_EVE_SUBTLE;
-    return true;
-  }
-  if (name == "EVE_COMIC") {
-    out = (uint8_t)DESKROBO_STYLE_EVE_COMIC;
-    return true;
-  }
-  if (name == "ROUND") {
-    out = (uint8_t)DESKROBO_STYLE_ROUND;
-    return true;
-  }
   return false;
 }
 
@@ -538,12 +526,7 @@ void DeskRoboBLE_Loop() {
         break;
       }
       case CMD_SET_STYLE: {
-        const char *style_name = "EVE_CINEMATIC";
-        if (cmd.a == (uint8_t)DESKROBO_STYLE_ROUND) style_name = "ROUND";
-        else if (cmd.a == (uint8_t)DESKROBO_STYLE_EVE_SUBTLE) style_name = "EVE_SUBTLE";
-        else if (cmd.a == (uint8_t)DESKROBO_STYLE_EVE_COMIC) style_name = "EVE_COMIC";
-        else style_name = "EVE_CINEMATIC";
-        (void)DeskRobo_SetStyleByName(style_name);
+        (void)DeskRobo_SetStyleByName("EVE_CINEMATIC");
         break;
       }
       case CMD_SET_STATUS_LABEL:

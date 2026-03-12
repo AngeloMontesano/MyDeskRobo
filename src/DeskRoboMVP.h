@@ -35,6 +35,7 @@ typedef enum {
   DESKROBO_STYLE_ROUND = 2,
   DESKROBO_STYLE_EVE_SUBTLE = 3,
   DESKROBO_STYLE_EVE_COMIC = 4,
+  DESKROBO_STYLE_AI = 5,
 } DeskRoboFaceStyle;
 
 void DeskRobo_Init();

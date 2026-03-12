@@ -41,10 +41,32 @@ async def control_loop(control_queue: asyncio.Queue, ble: BleClient):
         if not isinstance(cmd, tuple) or len(cmd) < 1:
             continue
         name = cmd[0]
-        if name == "tune" and len(cmd) == 3:
-            _, key, value = cmd
-            await ble.set_tuning(str(key), int(value))
-
+        try:
+            if name == "tune" and len(cmd) == 3:
+                _, key, value = cmd
+                await ble.set_tuning(str(key), int(value))
+            elif name == "style" and len(cmd) == 2:
+                await ble.set_style(str(cmd[1]))
+            elif name == "status_label" and len(cmd) == 2:
+                await ble.set_status_label_visible(bool(cmd[1]))
+            elif name == "backlight" and len(cmd) == 2:
+                await ble.set_backlight(int(cmd[1]))
+            elif name == "event" and len(cmd) == 2:
+                await ble.push_event(str(cmd[1]))
+            elif name == "emotion" and len(cmd) == 3:
+                await ble.set_emotion_named(str(cmd[1]), int(cmd[2]))
+            elif name == "eyes" and len(cmd) == 4:
+                await ble.set_eyes(str(cmd[1]), str(cmd[2]), int(cmd[3]))
+            elif name == "time_sync":
+                await ble.send_time_sync()
+            elif name == "tune_save":
+                await ble.save_tuning()
+            elif name == "tune_load":
+                await ble.load_tuning()
+            elif name == "cmd" and len(cmd) == 2:
+                await ble.send_command_payload(str(cmd[1]))
+        except Exception:
+            logging.exception("control command failed: %s", cmd)
 
 async def run(
     mode: str,
@@ -114,7 +136,7 @@ def parse_args():
         help="basic=outlook+calendar, all=all monitors",
     )
     p.add_argument("--send", type=int, default=None, help="one-shot emotion byte")
-    p.add_argument("--style", type=str, default=None, help="set eye style (EVE_SUBTLE/EVE_CINEMATIC/EVE_COMIC/ROUND)")
+    p.add_argument("--style", type=str, default=None, help="set eye style (EVE/EVE_CINEMATIC)")
     p.add_argument("--backlight", type=int, default=None, help="set backlight 0..100")
     p.add_argument("--status-label", choices=["on", "off"], default=None, help="show/hide bottom status label")
     p.add_argument("--event", type=str, default=None, help="trigger event by name (CALL/MAIL/TEAMS/LOUD/...)")
@@ -122,7 +144,7 @@ def parse_args():
     p.add_argument("--emotion-hold", type=int, default=3500, help="hold duration for --emotion-name")
     p.add_argument("--eyes", type=str, default=None, help="set eye pair LEFT:RIGHT[:HOLD_MS]")
     p.add_argument("--tune", action="append", default=[], help="set tuning key=value (repeatable)")
-    p.add_argument("--cmd", action="append", default=[], help="raw CMD payload, e.g. STYLE:EVE_COMIC")
+    p.add_argument("--cmd", action="append", default=[], help="raw CMD payload, e.g. STYLE:EVE_CINEMATIC")
     return p.parse_args()
 
 
