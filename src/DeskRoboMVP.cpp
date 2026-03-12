@@ -1,9 +1,10 @@
-﻿#include "DeskRoboMVP.h"
+#include "DeskRoboMVP.h"
 
 #include <cstring>
 #include <lvgl.h>
 #include <math.h>
 #include <Preferences.h>
+#include <WiFi.h>
 
 #include "LVGL_Arduino/Display_ST77916.h"
 #include "LVGL_Arduino/Gyro_QMI8658.h"
@@ -35,6 +36,30 @@
 #define DESKROBO_DEFAULT_WAKE_BACKLIGHT 15
 #endif
 
+#ifndef DESKROBO_BLE_SCREENSAVER_DELAY_MS
+#define DESKROBO_BLE_SCREENSAVER_DELAY_MS (15UL * 60UL * 1000UL)
+#endif
+
+#ifndef DESKROBO_BLE_DISPLAY_OFF_DELAY_MS
+#define DESKROBO_BLE_DISPLAY_OFF_DELAY_MS (30UL * 60UL * 1000UL)
+#endif
+
+#ifndef DESKROBO_BLE_SCREENSAVER_DIM_PCT
+#define DESKROBO_BLE_SCREENSAVER_DIM_PCT 35
+#endif
+
+#ifndef DESKROBO_IDLE_ROUND_ROBIN_AFTER_MS
+#define DESKROBO_IDLE_ROUND_ROBIN_AFTER_MS (4UL * 60UL * 1000UL)
+#endif
+
+#ifndef DESKROBO_IDLE_ROUND_ROBIN_INTERVAL_MS
+#define DESKROBO_IDLE_ROUND_ROBIN_INTERVAL_MS (45UL * 1000UL)
+#endif
+
+#ifndef DESKROBO_IDLE_ROUND_ROBIN_SHOW_MS
+#define DESKROBO_IDLE_ROUND_ROBIN_SHOW_MS (5000UL)
+#endif
+
 typedef struct {
   DeskRoboEmotion emotion;
   uint8_t priority;
@@ -60,8 +85,12 @@ static bool s_ble_connected = false;
 static bool s_ble_state_seen = false;
 static bool s_ble_sleep_face_active = false;
 static bool s_display_sleep_off = false;
+static bool s_display_dimmed = false;
 static uint32_t s_ble_disconnected_since_ms = 0;
 static uint8_t s_backlight_before_sleep = DESKROBO_DEFAULT_WAKE_BACKLIGHT;
+static uint32_t s_last_interaction_ms = 0;
+static uint32_t s_last_idle_round_ms = 0;
+static uint8_t s_idle_round_index = 0;
 
 static uint32_t s_last_sensor_ms = 0;
 static uint32_t s_last_motion_ms = 0;
@@ -76,12 +105,16 @@ static DeskRoboFaceStyle s_face_style = DESKROBO_STYLE_EVE;
 
 static FaceStyle to_face_style(DeskRoboFaceStyle style) {
   if (style == DESKROBO_STYLE_ROUND) return FACE_STYLE_ROUND;
-  return FACE_STYLE_EVE;
+  if (style == DESKROBO_STYLE_EVE_SUBTLE) return FACE_STYLE_EVE_SUBTLE;
+  if (style == DESKROBO_STYLE_EVE_COMIC) return FACE_STYLE_EVE_COMIC;
+  return FACE_STYLE_EVE_CINEMATIC;
 }
 
 static const char *style_name(DeskRoboFaceStyle style) {
   if (style == DESKROBO_STYLE_ROUND) return "ROUND";
-  return "EVE";
+  if (style == DESKROBO_STYLE_EVE_SUBTLE) return "EVE_SUBTLE";
+  if (style == DESKROBO_STYLE_EVE_COMIC) return "EVE_COMIC";
+  return "EVE_CINEMATIC";
 }
 
 static bool parse_style_name(const char *name, DeskRoboFaceStyle &out) {
@@ -90,6 +123,15 @@ static bool parse_style_name(const char *name, DeskRoboFaceStyle &out) {
       (strcmp(name, "EVE_CINEMATIC") == 0) ||
       (strcmp(name, "eve_cinematic") == 0)) {
     out = DESKROBO_STYLE_EVE;
+    return true;
+  }
+  if ((strcmp(name, "EVE_SUBTLE") == 0) ||
+      (strcmp(name, "eve_subtle") == 0)) {
+    out = DESKROBO_STYLE_EVE_SUBTLE;
+    return true;
+  }
+  if ((strcmp(name, "EVE_COMIC") == 0) || (strcmp(name, "eve_comic") == 0)) {
+    out = DESKROBO_STYLE_EVE_COMIC;
     return true;
   }
   if ((strcmp(name, "ROUND") == 0) || (strcmp(name, "round") == 0)) {
@@ -261,9 +303,29 @@ static uint8_t wake_backlight_level() {
 }
 
 static void wake_display_from_sleep() {
-  if (!s_display_sleep_off) return;
+  if (!s_display_sleep_off && !s_display_dimmed) return;
   Set_Backlight(wake_backlight_level());
   s_display_sleep_off = false;
+  s_display_dimmed = false;
+}
+
+static bool wifi_session_active() {
+  if (WiFi.status() == WL_CONNECTED) return true;
+  return WiFi.softAPgetStationNum() > 0;
+}
+
+static void mark_interaction(uint32_t now) {
+  s_last_interaction_ms = now;
+  wake_display_from_sleep();
+
+  if (s_ble_sleep_face_active) {
+    s_ble_sleep_face_active = false;
+    s_eye_pair_active = false;
+    s_current_emotion = DESKROBO_EMOTION_IDLE;
+    s_current_priority = 0;
+    s_emotion_expiry_ms = 0;
+    apply_emotion_style();
+  }
 }
 
 static void apply_ble_disconnect_policy(uint32_t now) {
@@ -273,39 +335,74 @@ static void apply_ble_disconnect_policy(uint32_t now) {
     s_ble_disconnected_since_ms = now;
   }
 
-  if (!s_ble_sleep_face_active || s_current_emotion != DESKROBO_EMOTION_SLEEPY ||
-      s_current_priority < 200) {
-    s_eye_pair_active = false;
-    s_current_emotion = DESKROBO_EMOTION_SLEEPY;
-    s_current_priority = 200;
-    s_emotion_expiry_ms = now + DESKROBO_BLE_DISCONNECT_SLEEP_OFF_MS;
-    s_ble_sleep_face_active = true;
-    apply_emotion_style();
+  // In WLAN/AP sessions, do not force sleepy screensaver.
+  if (wifi_session_active()) {
+    if (s_ble_sleep_face_active) {
+      s_ble_sleep_face_active = false;
+      s_current_emotion = DESKROBO_EMOTION_IDLE;
+      s_current_priority = 0;
+      s_emotion_expiry_ms = 0;
+      apply_emotion_style();
+    }
+    wake_display_from_sleep();
+    return;
   }
 
-  if (!s_display_sleep_off &&
-      ((now - s_ble_disconnected_since_ms) >= DESKROBO_BLE_DISCONNECT_SLEEP_OFF_MS)) {
+  const uint32_t idle_ms = now - s_last_interaction_ms;
+  if (idle_ms < DESKROBO_BLE_SCREENSAVER_DELAY_MS) {
+    return;
+  }
+
+  if (!s_ble_sleep_face_active) {
+    s_eye_pair_active = false;
+    s_current_emotion = DESKROBO_EMOTION_SLEEPY;
+    s_current_priority = 0;
+    s_emotion_expiry_ms = 0;
+    s_ble_sleep_face_active = true;
+    apply_emotion_style();
+    Serial.println("[MVP] Offline screensaver active");
+  }
+
+  if ((idle_ms >= DESKROBO_BLE_DISPLAY_OFF_DELAY_MS)) {
+    if (!s_display_sleep_off) {
+      if (LCD_Backlight > 0) s_backlight_before_sleep = LCD_Backlight;
+      Set_Backlight(0);
+      s_display_sleep_off = true;
+      s_display_dimmed = false;
+      Serial.println("[MVP] Offline timeout reached -> display off");
+    }
+    return;
+  }
+
+  // Between screensaver start and display-off timeout: keep dimmed sleepy view.
+  if (!s_display_dimmed && !s_display_sleep_off) {
     if (LCD_Backlight > 0) s_backlight_before_sleep = LCD_Backlight;
-    Set_Backlight(0);
-    s_display_sleep_off = true;
-    Serial.println("[MVP] BLE offline timeout reached -> display off");
+    uint8_t dim_level =
+        (uint8_t)((wake_backlight_level() * DESKROBO_BLE_SCREENSAVER_DIM_PCT) / 100U);
+    if (dim_level < 2) dim_level = 2;
+    Set_Backlight(dim_level);
+    s_display_dimmed = true;
   }
 }
 
 void DeskRobo_SetEmotion(DeskRoboEmotion emotion, uint32_t hold_ms) {
+  const uint32_t now = millis();
+  mark_interaction(now);
   s_eye_pair_active = false;
   s_current_emotion = emotion;
   s_current_priority = 100;
-  s_emotion_expiry_ms = millis() + hold_ms;
+  s_emotion_expiry_ms = now + hold_ms;
   apply_emotion_style();
 }
 
 void DeskRobo_SetEyePair(DeskRoboEmotion left, DeskRoboEmotion right,
                          uint32_t hold_ms) {
+  const uint32_t now = millis();
+  mark_interaction(now);
   s_left_eye_emotion = left;
   s_right_eye_emotion = right;
   s_eye_pair_active = true;
-  s_eye_pair_expiry_ms = millis() + hold_ms;
+  s_eye_pair_expiry_ms = now + hold_ms;
   s_current_priority = 100;
   s_emotion_expiry_ms = s_eye_pair_expiry_ms;
   apply_emotion_style();
@@ -360,10 +457,24 @@ bool DeskRobo_LoadTuning() {
   const int glow_pulse_period_ms = s_prefs.getInt(
       "glow_pulse_ms", s_face.getTuningValue("glow_pulse_period_ms"));
   s_prefs.end();
-  if (face_style == 1 || face_style == (int)DESKROBO_STYLE_EVE)
-    s_face_style = DESKROBO_STYLE_EVE;
-  else
-    s_face_style = DESKROBO_STYLE_EVE;
+  switch (face_style) {
+    case 0:
+    case (int)DESKROBO_STYLE_EVE:
+      s_face_style = DESKROBO_STYLE_EVE;
+      break;
+    case (int)DESKROBO_STYLE_ROUND:
+      s_face_style = DESKROBO_STYLE_ROUND;
+      break;
+    case (int)DESKROBO_STYLE_EVE_SUBTLE:
+      s_face_style = DESKROBO_STYLE_EVE_SUBTLE;
+      break;
+    case (int)DESKROBO_STYLE_EVE_COMIC:
+      s_face_style = DESKROBO_STYLE_EVE_COMIC;
+      break;
+    default:
+      s_face_style = DESKROBO_STYLE_EVE;
+      break;
+  }
 
   DeskRobo_SetTuning("drift_amp_px", drift_amp_px);
   DeskRobo_SetTuning("saccade_amp_px", saccade_amp_px);
@@ -407,9 +518,10 @@ void DeskRobo_SetBleConnected(bool connected) {
   s_ble_connected = connected;
 
   if (connected) {
+    const uint32_t now = millis();
     s_ble_disconnected_since_ms = 0;
     s_ble_sleep_face_active = false;
-    wake_display_from_sleep();
+    mark_interaction(now);
 
     s_eye_pair_active = false;
     s_current_emotion = DESKROBO_EMOTION_IDLE;
@@ -423,45 +535,42 @@ void DeskRobo_SetBleConnected(bool connected) {
 
   s_ble_disconnected_since_ms = millis();
   s_ble_sleep_face_active = false;
-  apply_ble_disconnect_policy(s_ble_disconnected_since_ms);
-  Serial.println("[MVP] BLE disconnected -> sleepy policy active");
+  Serial.println("[MVP] BLE disconnected -> screensaver armed");
 }
 
 void DeskRobo_PushEvent(DeskRoboEventType event_type) {
+  const uint32_t now = millis();
   const bool is_motion_wake = (event_type == DESKROBO_EVENT_MOTION_SHAKE) ||
                               (event_type == DESKROBO_EVENT_MOTION_TILT) ||
                               (event_type == DESKROBO_EVENT_MOTION_TAP);
+  const bool is_user_interaction = is_motion_wake ||
+                                   (event_type == DESKROBO_EVENT_PC_CALL) ||
+                                   (event_type == DESKROBO_EVENT_PC_MAIL) ||
+                                   (event_type == DESKROBO_EVENT_PC_TEAMS);
 
-  if (!s_ble_connected) {
-    if (is_motion_wake && s_display_sleep_off) {
-      wake_display_from_sleep();
-      s_ble_disconnected_since_ms = millis();
-      s_ble_sleep_face_active = false;
-      apply_ble_disconnect_policy(s_ble_disconnected_since_ms);
-      Serial.println("[MVP] Wake by motion while BLE offline");
-    }
-
-    if (event_type == DESKROBO_EVENT_MOTION_TAP) {
-      s_time_expiry_ms = millis() + 30000;
-      if (s_time_label) lv_obj_clear_flag(s_time_label, LV_OBJ_FLAG_HIDDEN);
-    }
-    return;
+  if (is_user_interaction) {
+    mark_interaction(now);
   }
 
   if (event_type == DESKROBO_EVENT_MOTION_TAP) {
-    s_time_expiry_ms = millis() + 30000;
+    s_time_expiry_ms = now + 30000;
     if (s_time_label) lv_obj_clear_flag(s_time_label, LV_OBJ_FLAG_HIDDEN);
+  }
+
+  // While screensaver is active, only explicit interaction may interrupt it.
+  if (s_ble_sleep_face_active && !is_user_interaction &&
+      (event_type != DESKROBO_EVENT_MOTION_TAP)) {
     return;
   }
 
   const DeskRoboEventRule rule = event_rule(event_type);
-  if ((rule.priority < s_current_priority) && (millis() < s_emotion_expiry_ms)) {
+  if ((rule.priority < s_current_priority) && (now < s_emotion_expiry_ms)) {
     return;
   }
 
   s_current_emotion = rule.emotion;
   s_current_priority = rule.priority;
-  s_emotion_expiry_ms = millis() + rule.ttl_ms;
+  s_emotion_expiry_ms = now + rule.ttl_ms;
   apply_emotion_style();
 }
 
@@ -592,9 +701,13 @@ void DeskRobo_Init() {
   s_ble_state_seen = false;
   s_ble_sleep_face_active = false;
   s_display_sleep_off = false;
+  s_display_dimmed = false;
   s_ble_disconnected_since_ms = 0;
   s_backlight_before_sleep =
       (LCD_Backlight > 0) ? LCD_Backlight : DESKROBO_DEFAULT_WAKE_BACKLIGHT;
+  s_last_interaction_ms = millis();
+  s_last_idle_round_ms = s_last_interaction_ms;
+  s_idle_round_index = 0;
 
   DeskRobo_LoadTuning();
   apply_emotion_style();
@@ -609,11 +722,32 @@ void DeskRobo_Loop() {
     apply_ble_disconnect_policy(now);
   }
 
-  if (s_ble_connected && (s_current_priority > 0) && (now > s_emotion_expiry_ms)) {
+  if ((s_current_priority > 0) && (now > s_emotion_expiry_ms)) {
     s_eye_pair_active = false;
     s_current_emotion = DESKROBO_EMOTION_IDLE;
     s_current_priority = 0;
     s_emotion_expiry_ms = 0;
+    apply_emotion_style();
+  }
+
+  // IDLE stays default; after long inactivity, briefly rotate through a few emotions.
+  if (!s_eye_pair_active && !s_ble_sleep_face_active &&
+      (s_current_emotion == DESKROBO_EMOTION_IDLE) && (s_current_priority == 0) &&
+      ((now - s_last_interaction_ms) >= DESKROBO_IDLE_ROUND_ROBIN_AFTER_MS) &&
+      ((now - s_last_idle_round_ms) >= DESKROBO_IDLE_ROUND_ROBIN_INTERVAL_MS)) {
+    static const DeskRoboEmotion kIdleRound[] = {
+        DESKROBO_EMOTION_HAPPY,
+        DESKROBO_EMOTION_CONFUSED,
+        DESKROBO_EMOTION_WOW,
+        DESKROBO_EMOTION_EXCITED,
+        DESKROBO_EMOTION_SAD,
+    };
+    const size_t idx = (size_t)(s_idle_round_index % (sizeof(kIdleRound) / sizeof(kIdleRound[0])));
+    s_idle_round_index = (uint8_t)(s_idle_round_index + 1U);
+    s_last_idle_round_ms = now;
+    s_current_emotion = kIdleRound[idx];
+    s_current_priority = 5;
+    s_emotion_expiry_ms = now + DESKROBO_IDLE_ROUND_ROBIN_SHOW_MS;
     apply_emotion_style();
   }
 
