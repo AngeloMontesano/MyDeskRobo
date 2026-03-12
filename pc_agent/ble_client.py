@@ -1,6 +1,6 @@
-﻿import asyncio
+import asyncio
 import logging
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 
 from bleak import BleakClient, BleakScanner
 
@@ -22,7 +22,7 @@ LOG = logging.getLogger("ble")
 
 
 class BleClient:
-    def __init__(self):
+    def __init__(self, status_callback: Optional[Callable[[str, str], None]] = None):
         self._client: Optional[BleakClient] = None
         self._lock = asyncio.Lock()
         self._connected_event = asyncio.Event()
@@ -31,10 +31,21 @@ class BleClient:
         self._seq = 0
         self._ack_waiters: Dict[int, asyncio.Future] = {}
         self._pong_waiters: Dict[int, asyncio.Future] = {}
+        self._status_callback = status_callback
 
     @property
     def is_connected(self) -> bool:
         return bool(self._client and self._client.is_connected)
+
+    def _emit_status(self, state: str, message: str = "") -> None:
+        cb = self._status_callback
+        if not cb:
+            return
+        try:
+            cb(state, message)
+        except Exception:
+            # Status callback failures must never break transport.
+            pass
 
     def _next_seq(self) -> int:
         self._seq = (self._seq + 1) & 0xFF
@@ -118,12 +129,15 @@ class BleClient:
         except Exception:
             pass
 
+        self._emit_status("searching", "Suche nach DeskRobo...")
         dev = await self._find_device()
         if not dev:
+            self._emit_status("not_found", "DeskRobo nicht gefunden")
             raise RuntimeError(
                 f"BLE device not found (service={BLE_SERVICE_UUID}, names={BLE_DEVICE_NAME}/{BLE_DEVICE_NAME_ALIASES})"
             )
 
+        self._emit_status("connecting", f"Verbinde mit {dev.name}")
         self._client = BleakClient(dev, disconnected_callback=self._on_disconnected)
         await self._client.connect()
 
@@ -136,12 +150,14 @@ class BleClient:
             LOG.warning("notify unavailable, fallback to write-only mode: %s", exc)
 
         self._connected_event.set()
+        self._emit_status("connected", f"Verbunden: {dev.name}")
         LOG.info("connected: %s (%s)", dev.name, dev.address)
 
     def _on_disconnected(self, _client) -> None:
         self._connected_event.clear()
         self._notify_enabled = False
         self._clear_waiters()
+        self._emit_status("disconnected", "BLE getrennt")
         LOG.warning("BLE disconnected")
 
     async def _write_text(self, text: str) -> None:
@@ -236,11 +252,13 @@ class BleClient:
                     continue
 
                 if not await self.send_ping():
+                    self._emit_status("heartbeat_timeout", "Heartbeat-Timeout")
                     LOG.warning("heartbeat timeout, forcing reconnect")
                     if self._client and self._client.is_connected:
                         await self._client.disconnect()
 
                 await asyncio.sleep(BLE_HEARTBEAT_S)
             except Exception as exc:
+                self._emit_status("retry", f"Neuversuch in {BLE_RECONNECT_DELAY_S}s: {exc}")
                 LOG.warning("reconnect retry in %ss: %s", BLE_RECONNECT_DELAY_S, exc)
                 await asyncio.sleep(BLE_RECONNECT_DELAY_S)

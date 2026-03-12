@@ -1,11 +1,14 @@
 import argparse
 import asyncio
 import logging
+from typing import Callable, Optional
 
 from ble_client import BleClient
 from dispatch import Dispatcher
 from monitors import Emotion, RoboEvent, safe_monitor
 from monitors import calendar_mon, microphone, outlook, teams
+
+StatusCallback = Optional[Callable[[str, str], None]]
 
 
 def setup_logging():
@@ -16,16 +19,28 @@ def setup_logging():
     )
 
 
+def _emit_status(status_callback: StatusCallback, state: str, message: str = "") -> None:
+    if not status_callback:
+        return
+    try:
+        status_callback(state, message)
+    except Exception:
+        # UI/log callbacks must never stop the agent runtime.
+        pass
+
+
 async def dispatch_loop(queue: asyncio.Queue, dispatcher: Dispatcher):
     while True:
         event = await queue.get()
         await dispatcher.handle(event)
 
 
-async def run(mode: str):
+async def run(mode: str, status_callback: StatusCallback = None, stop_event: Optional[asyncio.Event] = None):
     queue: asyncio.Queue[RoboEvent] = asyncio.Queue()
-    ble = BleClient()
+    ble = BleClient(status_callback=status_callback)
     dispatcher = Dispatcher(ble)
+
+    _emit_status(status_callback, "starting", f"Agent startet im Modus: {mode}")
 
     tasks = [
         asyncio.create_task(ble.reconnect_loop()),
@@ -41,14 +56,35 @@ async def run(mode: str):
     tasks.append(asyncio.create_task(dispatch_loop(queue, dispatcher)))
 
     try:
-        await asyncio.gather(*tasks)
+        if stop_event is None:
+            await asyncio.gather(*tasks)
+        else:
+            stop_task = asyncio.create_task(stop_event.wait())
+            done, _ = await asyncio.wait(
+                tasks + [stop_task],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if stop_task not in done:
+                for task in done:
+                    if task is stop_task:
+                        continue
+                    exc = task.exception()
+                    if exc is not None:
+                        raise exc
+                await asyncio.gather(*tasks)
     except asyncio.CancelledError:
         pass
     finally:
+        _emit_status(status_callback, "stopping", "Agent wird beendet")
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
         # Graceful shutdown: send IDLE then disconnect.
         if ble.is_connected:
             await ble.send_emotion(Emotion.IDLE)
         await ble.disconnect()
+        _emit_status(status_callback, "stopped", "Agent gestoppt")
 
 
 def parse_args():
