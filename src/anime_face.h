@@ -26,8 +26,10 @@ typedef enum {
 } Emotion;
 
 typedef enum {
-  FACE_STYLE_EVE = 0,
-  FACE_STYLE_ROUND
+  FACE_STYLE_EVE_CINEMATIC = 0,
+  FACE_STYLE_ROUND,
+  FACE_STYLE_EVE_SUBTLE,
+  FACE_STYLE_EVE_COMIC
 } FaceStyle;
 
 class AnimeFace {

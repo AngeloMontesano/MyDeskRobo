@@ -11,6 +11,7 @@
 #include <stdlib.h>
 
 #include "DeskRoboMVP.h"
+#include "LVGL_Arduino/Display_ST77916.h"
 
 namespace {
 constexpr const char *kDeviceName = "MyRoboDesk";
@@ -29,6 +30,10 @@ enum CmdType : uint8_t {
   CMD_PUSH_EVENT = 2,
   CMD_SET_EYES = 3,
   CMD_SET_TIME = 4,
+  CMD_SET_STYLE = 5,
+  CMD_SET_STATUS_LABEL = 6,
+  CMD_SET_BACKLIGHT = 7,
+  CMD_SET_TUNING = 8,
 };
 
 struct BleCmd {
@@ -84,6 +89,10 @@ bool parseEmotion(const String &name, DeskRoboEmotion &out) {
   else if (name == "SLEEPY") out = DESKROBO_EMOTION_SLEEPY;
   else if (name == "CONFUSED") out = DESKROBO_EMOTION_CONFUSED;
   else if (name == "EXCITED") out = DESKROBO_EMOTION_EXCITED;
+  else if (name == "DIZZY") out = DESKROBO_EMOTION_DIZZY;
+  else if (name == "MAIL") out = DESKROBO_EMOTION_MAIL;
+  else if (name == "CALL") out = DESKROBO_EMOTION_CALL;
+  else if (name == "SHAKE") out = DESKROBO_EMOTION_SHAKE;
   else return false;
   return true;
 }
@@ -99,6 +108,90 @@ bool parseEvent(const String &name, DeskRoboEventType &out) {
   else if (name == "TEAMS") out = DESKROBO_EVENT_PC_TEAMS;
   else return false;
   return true;
+}
+
+enum TuneKeyId : uint8_t {
+  TUNE_KEY_NONE = 0,
+  TUNE_KEY_DRIFT_AMP = 1,
+  TUNE_KEY_SACCADE_AMP = 2,
+  TUNE_KEY_SACCADE_MIN = 3,
+  TUNE_KEY_SACCADE_MAX = 4,
+  TUNE_KEY_BLINK_INTERVAL = 5,
+  TUNE_KEY_BLINK_DURATION = 6,
+  TUNE_KEY_DBL_BLINK_PCT = 7,
+  TUNE_KEY_GLOW_AMP = 8,
+  TUNE_KEY_GLOW_PERIOD = 9,
+};
+
+bool parseBoolToken(const String &in, bool &out) {
+  if ((in == "1") || (in == "TRUE") || (in == "ON")) {
+    out = true;
+    return true;
+  }
+  if ((in == "0") || (in == "FALSE") || (in == "OFF")) {
+    out = false;
+    return true;
+  }
+  return false;
+}
+
+bool parseStyleCode(const String &name, uint8_t &out) {
+  if ((name == "EVE") || (name == "EVE_CINEMATIC")) {
+    out = (uint8_t)DESKROBO_STYLE_EVE;
+    return true;
+  }
+  if (name == "EVE_SUBTLE") {
+    out = (uint8_t)DESKROBO_STYLE_EVE_SUBTLE;
+    return true;
+  }
+  if (name == "EVE_COMIC") {
+    out = (uint8_t)DESKROBO_STYLE_EVE_COMIC;
+    return true;
+  }
+  if (name == "ROUND") {
+    out = (uint8_t)DESKROBO_STYLE_ROUND;
+    return true;
+  }
+  return false;
+}
+
+bool parseTuneKeyId(const String &name, uint8_t &out) {
+  if (name == "DRIFT_AMP_PX") out = TUNE_KEY_DRIFT_AMP;
+  else if (name == "SACCADE_AMP_PX") out = TUNE_KEY_SACCADE_AMP;
+  else if (name == "SACCADE_MIN_MS") out = TUNE_KEY_SACCADE_MIN;
+  else if (name == "SACCADE_MAX_MS") out = TUNE_KEY_SACCADE_MAX;
+  else if (name == "BLINK_INTERVAL_MS") out = TUNE_KEY_BLINK_INTERVAL;
+  else if (name == "BLINK_DURATION_MS") out = TUNE_KEY_BLINK_DURATION;
+  else if (name == "DOUBLE_BLINK_CHANCE_PCT") out = TUNE_KEY_DBL_BLINK_PCT;
+  else if (name == "GLOW_PULSE_AMP") out = TUNE_KEY_GLOW_AMP;
+  else if (name == "GLOW_PULSE_PERIOD_MS") out = TUNE_KEY_GLOW_PERIOD;
+  else return false;
+  return true;
+}
+
+const char *tuneKeyName(uint8_t key_id) {
+  switch (key_id) {
+    case TUNE_KEY_DRIFT_AMP:
+      return "drift_amp_px";
+    case TUNE_KEY_SACCADE_AMP:
+      return "saccade_amp_px";
+    case TUNE_KEY_SACCADE_MIN:
+      return "saccade_min_ms";
+    case TUNE_KEY_SACCADE_MAX:
+      return "saccade_max_ms";
+    case TUNE_KEY_BLINK_INTERVAL:
+      return "blink_interval_ms";
+    case TUNE_KEY_BLINK_DURATION:
+      return "blink_duration_ms";
+    case TUNE_KEY_DBL_BLINK_PCT:
+      return "double_blink_chance_pct";
+    case TUNE_KEY_GLOW_AMP:
+      return "glow_pulse_amp";
+    case TUNE_KEY_GLOW_PERIOD:
+      return "glow_pulse_period_ms";
+    default:
+      return nullptr;
+  }
 }
 
 bool enqueueEmotionCode(uint8_t code, uint32_t hold_override_ms = 0) {
@@ -227,6 +320,82 @@ void handleTextCommand(String cmd) {
     return;
   }
 
+  if (u.startsWith("CMD:")) {
+    const int p1 = u.indexOf(':', 4);
+    const int p2 = (p1 >= 0) ? u.indexOf(':', p1 + 1) : -1;
+    if (p1 < 0 || p2 < 0) return;
+
+    uint32_t seq = 0;
+    if (!parseUint32Strict(u.substring(4, p1), seq)) return;
+
+    const String action = u.substring(p1 + 1, p2);
+    const String payload = u.substring(p2 + 1);
+    bool ok = false;
+
+    if (action == "STYLE") {
+      uint8_t style_code = 0;
+      if (parseStyleCode(payload, style_code)) {
+        ok = enqueueCmd({CMD_SET_STYLE, style_code, 0, 0});
+      }
+    } else if (action == "STATUS_LABEL") {
+      bool visible = false;
+      if (parseBoolToken(payload, visible)) {
+        ok = enqueueCmd({CMD_SET_STATUS_LABEL, (uint8_t)(visible ? 1 : 0), 0, 0});
+      }
+    } else if (action == "BACKLIGHT") {
+      uint32_t value = 0;
+      if (parseUint32Strict(payload, value)) {
+        ok = enqueueCmd({CMD_SET_BACKLIGHT, (uint8_t)constrain((int)value, 0, 100), 0, 0});
+      }
+    } else if (action == "TUNE") {
+      const int p3 = u.indexOf(':', p2 + 1);
+      if (p3 > 0) {
+        const String key_name = u.substring(p2 + 1, p3);
+        uint32_t value = 0;
+        uint8_t key_id = TUNE_KEY_NONE;
+        if (parseTuneKeyId(key_name, key_id) && parseUint32Strict(u.substring(p3 + 1), value)) {
+          ok = enqueueCmd({CMD_SET_TUNING, key_id, 0, value});
+        }
+      }
+    } else if (action == "EVENT") {
+      DeskRoboEventType ev;
+      if (parseEvent(payload, ev)) {
+        ok = enqueueCmd({CMD_PUSH_EVENT, (uint8_t)ev, 0, 0});
+      }
+    } else if (action == "EMOTION") {
+      const int p3 = u.indexOf(':', p2 + 1);
+      String emo_name = payload;
+      uint32_t hold_ms = 3500;
+      if (p3 > 0) {
+        emo_name = u.substring(p2 + 1, p3);
+        uint32_t hold_tmp = 0;
+        if (parseUint32Strict(u.substring(p3 + 1), hold_tmp)) {
+          hold_ms = hold_tmp;
+        }
+      }
+      DeskRoboEmotion emo;
+      if (parseEmotion(emo_name, emo)) {
+        ok = enqueueCmd({CMD_SET_EMOTION, (uint8_t)emo, 0, hold_ms});
+      }
+    } else if (action == "EYES") {
+      const int p3 = u.indexOf(':', p2 + 1);
+      const int p4 = (p3 >= 0) ? u.indexOf(':', p3 + 1) : -1;
+      if (p3 > 0 && p4 > 0) {
+        const String left_name = u.substring(p2 + 1, p3);
+        const String right_name = u.substring(p3 + 1, p4);
+        uint32_t hold_ms = 0;
+        DeskRoboEmotion left;
+        DeskRoboEmotion right;
+        if (parseEmotion(left_name, left) && parseEmotion(right_name, right) &&
+            parseUint32Strict(u.substring(p4 + 1), hold_ms)) {
+          ok = enqueueCmd({CMD_SET_EYES, (uint8_t)left, (uint8_t)right, hold_ms > 0 ? hold_ms : 5000u});
+        }
+      }
+    }
+
+    notifyAck(seq, ok);
+    return;
+  }
   if (u.startsWith("EVENT:")) {
     const String name = u.substring(6);
     DeskRoboEventType ev;
@@ -348,6 +517,28 @@ void DeskRoboBLE_Loop() {
         const bool ok = (settimeofday(&tv, nullptr) == 0);
         Serial.printf("[BLE] apply time unix=%lu ok=%u\n",
                       (unsigned long)cmd.hold_ms, ok ? 1u : 0u);
+        break;
+      }
+      case CMD_SET_STYLE: {
+        const char *style_name = "EVE_CINEMATIC";
+        if (cmd.a == (uint8_t)DESKROBO_STYLE_ROUND) style_name = "ROUND";
+        else if (cmd.a == (uint8_t)DESKROBO_STYLE_EVE_SUBTLE) style_name = "EVE_SUBTLE";
+        else if (cmd.a == (uint8_t)DESKROBO_STYLE_EVE_COMIC) style_name = "EVE_COMIC";
+        else style_name = "EVE_CINEMATIC";
+        (void)DeskRobo_SetStyleByName(style_name);
+        break;
+      }
+      case CMD_SET_STATUS_LABEL:
+        DeskRobo_SetStatusLabelVisible(cmd.a != 0);
+        break;
+      case CMD_SET_BACKLIGHT:
+        Set_Backlight((uint8_t)constrain((int)cmd.a, 0, 100));
+        break;
+      case CMD_SET_TUNING: {
+        const char *key = tuneKeyName(cmd.a);
+        if (key) {
+          (void)DeskRobo_SetTuning(key, (int)cmd.hold_ms);
+        }
         break;
       }
       default:

@@ -1,7 +1,7 @@
 import argparse
 import asyncio
 import logging
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 from ble_client import BleClient
 from dispatch import Dispatcher
@@ -35,7 +35,23 @@ async def dispatch_loop(queue: asyncio.Queue, dispatcher: Dispatcher):
         await dispatcher.handle(event)
 
 
-async def run(mode: str, status_callback: StatusCallback = None, stop_event: Optional[asyncio.Event] = None):
+async def control_loop(control_queue: asyncio.Queue, ble: BleClient):
+    while True:
+        cmd = await control_queue.get()
+        if not isinstance(cmd, tuple) or len(cmd) < 1:
+            continue
+        name = cmd[0]
+        if name == "tune" and len(cmd) == 3:
+            _, key, value = cmd
+            await ble.set_tuning(str(key), int(value))
+
+
+async def run(
+    mode: str,
+    status_callback: StatusCallback = None,
+    stop_event: Optional[asyncio.Event] = None,
+    control_queue: Optional[asyncio.Queue[Any]] = None,
+):
     queue: asyncio.Queue[RoboEvent] = asyncio.Queue()
     ble = BleClient(status_callback=status_callback)
     dispatcher = Dispatcher(ble)
@@ -54,6 +70,8 @@ async def run(mode: str, status_callback: StatusCallback = None, stop_event: Opt
         tasks.append(asyncio.create_task(safe_monitor(microphone.run, queue, "mic")))
 
     tasks.append(asyncio.create_task(dispatch_loop(queue, dispatcher)))
+    if control_queue is not None:
+        tasks.append(asyncio.create_task(control_loop(control_queue, ble)))
 
     try:
         if stop_event is None:
@@ -96,6 +114,15 @@ def parse_args():
         help="basic=outlook+calendar, all=all monitors",
     )
     p.add_argument("--send", type=int, default=None, help="one-shot emotion byte")
+    p.add_argument("--style", type=str, default=None, help="set eye style (EVE_SUBTLE/EVE_CINEMATIC/EVE_COMIC/ROUND)")
+    p.add_argument("--backlight", type=int, default=None, help="set backlight 0..100")
+    p.add_argument("--status-label", choices=["on", "off"], default=None, help="show/hide bottom status label")
+    p.add_argument("--event", type=str, default=None, help="trigger event by name (CALL/MAIL/TEAMS/LOUD/...)")
+    p.add_argument("--emotion-name", type=str, default=None, help="set emotion by name (IDLE/HAPPY/SAD/...)")
+    p.add_argument("--emotion-hold", type=int, default=3500, help="hold duration for --emotion-name")
+    p.add_argument("--eyes", type=str, default=None, help="set eye pair LEFT:RIGHT[:HOLD_MS]")
+    p.add_argument("--tune", action="append", default=[], help="set tuning key=value (repeatable)")
+    p.add_argument("--cmd", action="append", default=[], help="raw CMD payload, e.g. STYLE:EVE_COMIC")
     return p.parse_args()
 
 
@@ -109,6 +136,62 @@ async def main():
             await ble.connect()
             await ble.send_emotion(args.send)
             await asyncio.sleep(0.5)
+        finally:
+            await ble.disconnect()
+        return
+
+    has_control_cmd = any(
+        [
+            args.style is not None,
+            args.backlight is not None,
+            args.status_label is not None,
+            args.event is not None,
+            args.emotion_name is not None,
+            args.eyes is not None,
+            bool(args.tune),
+            bool(args.cmd),
+        ]
+    )
+
+    if has_control_cmd:
+        ble = BleClient()
+        try:
+            await ble.connect()
+
+            if args.style is not None:
+                await ble.set_style(args.style)
+            if args.backlight is not None:
+                await ble.set_backlight(args.backlight)
+            if args.status_label is not None:
+                await ble.set_status_label_visible(args.status_label == "on")
+            if args.event is not None:
+                await ble.push_event(args.event)
+            if args.emotion_name is not None:
+                await ble.set_emotion_named(args.emotion_name, args.emotion_hold)
+            if args.eyes is not None:
+                parts = [part.strip() for part in args.eyes.split(":") if part.strip()]
+                if len(parts) >= 2:
+                    hold_ms = int(parts[2]) if len(parts) >= 3 else 5000
+                    await ble.set_eyes(parts[0], parts[1], hold_ms)
+                else:
+                    logging.error("--eyes format invalid, expected LEFT:RIGHT[:HOLD_MS]")
+
+            for item in args.tune:
+                if "=" not in item:
+                    logging.error("--tune format invalid: %s (expected key=value)", item)
+                    continue
+                key, raw_val = item.split("=", 1)
+                try:
+                    val = int(raw_val.strip())
+                except ValueError:
+                    logging.error("--tune value invalid: %s", item)
+                    continue
+                await ble.set_tuning(key.strip(), val)
+
+            for payload in args.cmd:
+                await ble.send_command_payload(payload)
+
+            await asyncio.sleep(0.3)
         finally:
             await ble.disconnect()
         return

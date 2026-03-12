@@ -225,6 +225,80 @@ class BleClient:
             finally:
                 self._ack_waiters.pop(seq, None)
 
+    async def send_command_payload(self, payload: str) -> bool:
+        payload = (payload or "").strip()
+        if not payload:
+            return False
+
+        for attempt in range(1, BLE_WRITE_RETRIES + 1):
+            async with self._lock:
+                if not await self.wait_connected():
+                    LOG.warning("drop cmd=%s (not connected)", payload)
+                    return False
+
+                seq = self._next_seq()
+                fut: Optional[asyncio.Future] = None
+
+                try:
+                    if self._notify_enabled:
+                        fut = asyncio.get_running_loop().create_future()
+                        self._ack_waiters[seq] = fut
+
+                    await self._write_text(f"CMD:{seq}:{payload}")
+
+                    if self._notify_enabled and fut is not None:
+                        ok = bool(await asyncio.wait_for(fut, timeout=BLE_ACK_TIMEOUT_S))
+                        if ok:
+                            LOG.info("tx cmd=%s seq=%d ack=ok", payload, seq)
+                            return True
+                        LOG.warning("tx cmd=%s seq=%d ack=nack", payload, seq)
+                    else:
+                        LOG.info("tx cmd=%s seq=%d (notify off)", payload, seq)
+                        return True
+                except Exception as exc:
+                    LOG.warning(
+                        "BLE cmd attempt %d/%d failed (%s): %s",
+                        attempt,
+                        BLE_WRITE_RETRIES,
+                        payload,
+                        exc,
+                    )
+                    self._connected_event.clear()
+                finally:
+                    self._ack_waiters.pop(seq, None)
+
+            if attempt < BLE_WRITE_RETRIES:
+                await asyncio.sleep(BLE_WRITE_RETRY_DELAY_S * attempt)
+
+        return False
+
+    async def set_style(self, style_name: str) -> bool:
+        return await self.send_command_payload(f"STYLE:{str(style_name).strip().upper()}")
+
+    async def set_status_label_visible(self, visible: bool) -> bool:
+        return await self.send_command_payload(f"STATUS_LABEL:{1 if visible else 0}")
+
+    async def set_backlight(self, value: int) -> bool:
+        v = max(0, min(100, int(value)))
+        return await self.send_command_payload(f"BACKLIGHT:{v}")
+
+    async def set_tuning(self, key: str, value: int) -> bool:
+        k = str(key).strip().upper()
+        return await self.send_command_payload(f"TUNE:{k}:{int(value)}")
+
+    async def push_event(self, event_name: str) -> bool:
+        return await self.send_command_payload(f"EVENT:{str(event_name).strip().upper()}")
+
+    async def set_emotion_named(self, emotion_name: str, hold_ms: int = 3500) -> bool:
+        h = max(0, int(hold_ms))
+        return await self.send_command_payload(f"EMOTION:{str(emotion_name).strip().upper()}:{h}")
+
+    async def set_eyes(self, left_name: str, right_name: str, hold_ms: int = 5000) -> bool:
+        h = max(0, int(hold_ms))
+        left = str(left_name).strip().upper()
+        right = str(right_name).strip().upper()
+        return await self.send_command_payload(f"EYES:{left}:{right}:{h}")
+
     async def send_emotion(self, emotion: int) -> bool:
         emotion = int(emotion) & 0xFF
 

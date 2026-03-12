@@ -95,6 +95,9 @@ static uint8_t s_idle_round_index = 0;
 static uint32_t s_last_sensor_ms = 0;
 static uint32_t s_last_motion_ms = 0;
 static uint32_t s_last_tilt_event_ms = 0;
+static int s_gyro_tilt_xy_pct = 62;
+static int s_gyro_tilt_z_pct = 64;
+static int s_gyro_tilt_cooldown_ms = 2200;
 static uint32_t s_last_shake_event_ms = 0;
 static const char *s_last_motion_event = "none";
 
@@ -409,14 +412,36 @@ void DeskRobo_SetEyePair(DeskRoboEmotion left, DeskRoboEmotion right,
 }
 
 bool DeskRobo_SetTuning(const char *key, int value) {
-  const bool ok = s_face.setTuningValue(key, value);
+  if (!key) return false;
+  bool ok = s_face.setTuningValue(key, value);
+  if (!ok) {
+    if (strcmp(key, "gyro_tilt_xy_pct") == 0) {
+      s_gyro_tilt_xy_pct = constrain(value, 40, 90);
+      ok = true;
+    } else if (strcmp(key, "gyro_tilt_z_pct") == 0) {
+      s_gyro_tilt_z_pct = constrain(value, 30, 90);
+      ok = true;
+    } else if (strcmp(key, "gyro_tilt_cooldown_ms") == 0) {
+      s_gyro_tilt_cooldown_ms = constrain(value, 400, 10000);
+      ok = true;
+    }
+  }
   if (ok) {
     apply_emotion_style();
   }
   return ok;
 }
 
-String DeskRobo_GetTuningJson() { return s_face.getTuningJson(); }
+
+String DeskRobo_GetTuningJson() {
+  String out = s_face.getTuningJson();
+  if (out.endsWith("}")) out.remove(out.length() - 1);
+  out += ",\"gyro_tilt_xy_pct\":" + String(s_gyro_tilt_xy_pct);
+  out += ",\"gyro_tilt_z_pct\":" + String(s_gyro_tilt_z_pct);
+  out += ",\"gyro_tilt_cooldown_ms\":" + String(s_gyro_tilt_cooldown_ms);
+  out += "}";
+  return out;
+}
 
 bool DeskRobo_SaveTuning() {
   if (!s_prefs.begin("deskrobo", false)) return false;
@@ -431,6 +456,9 @@ bool DeskRobo_SaveTuning() {
                  s_face.getTuningValue("double_blink_chance_pct"));
   s_prefs.putInt("glow_pulse_amp", s_face.getTuningValue("glow_pulse_amp"));
   s_prefs.putInt("glow_pulse_ms", s_face.getTuningValue("glow_pulse_period_ms"));
+  s_prefs.putInt("gyro_tilt_xy_pct", s_gyro_tilt_xy_pct);
+  s_prefs.putInt("gyro_tilt_z_pct", s_gyro_tilt_z_pct);
+  s_prefs.putInt("gyro_tilt_cooldown", s_gyro_tilt_cooldown_ms);
   s_prefs.end();
   return true;
 }
@@ -456,6 +484,10 @@ bool DeskRobo_LoadTuning() {
       "glow_pulse_amp", s_face.getTuningValue("glow_pulse_amp"));
   const int glow_pulse_period_ms = s_prefs.getInt(
       "glow_pulse_ms", s_face.getTuningValue("glow_pulse_period_ms"));
+  const int gyro_tilt_xy_pct = s_prefs.getInt("gyro_tilt_xy_pct", s_gyro_tilt_xy_pct);
+  const int gyro_tilt_z_pct = s_prefs.getInt("gyro_tilt_z_pct", s_gyro_tilt_z_pct);
+  const int gyro_tilt_cooldown_ms =
+      s_prefs.getInt("gyro_tilt_cooldown", s_gyro_tilt_cooldown_ms);
   s_prefs.end();
   switch (face_style) {
     case 0:
@@ -485,6 +517,9 @@ bool DeskRobo_LoadTuning() {
   DeskRobo_SetTuning("double_blink_chance_pct", double_blink_chance_pct);
   DeskRobo_SetTuning("glow_pulse_amp", glow_pulse_amp);
   DeskRobo_SetTuning("glow_pulse_period_ms", glow_pulse_period_ms);
+  DeskRobo_SetTuning("gyro_tilt_xy_pct", gyro_tilt_xy_pct);
+  DeskRobo_SetTuning("gyro_tilt_z_pct", gyro_tilt_z_pct);
+  DeskRobo_SetTuning("gyro_tilt_cooldown_ms", gyro_tilt_cooldown_ms);
   apply_emotion_style();
   return true;
 }
@@ -622,7 +657,10 @@ static void read_motion_sensor() {
   const uint32_t now = millis();
 
   // Tilt: board moved away from flat orientation.
-  if (((abs_x > 0.45f) || (abs_y > 0.45f) || (abs_z < 0.78f)) && ((now - s_last_tilt_event_ms) > 700)) {
+  const float tilt_xy_th = (float)s_gyro_tilt_xy_pct / 100.0f;
+  const float tilt_z_th = (float)s_gyro_tilt_z_pct / 100.0f;
+  if (((abs_x > tilt_xy_th) || (abs_y > tilt_xy_th) || (abs_z < tilt_z_th)) &&
+      ((now - s_last_tilt_event_ms) > (uint32_t)s_gyro_tilt_cooldown_ms)) {
     s_last_tilt_event_ms = now;
     s_last_motion_event = "tilt";
 #if DESKROBO_GYRO_EVENTS
@@ -786,4 +824,5 @@ void DeskRobo_Loop() {
 
   s_face.update();
 }
+
 

@@ -77,3 +77,32 @@ Ergebnis: `pc_agent\dist\DeskRoboAgent.exe`
 - Beim Verbinden sendet der Agent automatisch die aktuelle Unix-Zeit an DeskRobo (TIME:<seq>:<epoch>).
 - Danach erfolgt periodische Nachsynchronisierung (Standard: alle 10 Minuten).
 - Bei Fehler wird nach 30 Sekunden erneut versucht (konfigurierbar in config.py).
+
+## BLE Remote Control (wie Webfrontend)
+
+Mit CLI-Flags kannst du zentrale Webfrontend-Funktionen direkt ueber BLE senden:
+
+```powershell
+cd pc_agent
+.\.venv\Scripts\python.exe pc_agent.py --style EVE_COMIC --backlight 70 --status-label on
+```
+
+Weitere Beispiele:
+
+```powershell
+# Event ausloesen
+.\.venv\Scripts\python.exe pc_agent.py --event CALL
+
+# Emotion + Hold
+.\.venv\Scripts\python.exe pc_agent.py --emotion-name HAPPY --emotion-hold 4000
+
+# Linkes/Rechtes Auge setzen (inkl. Hold in ms)
+.\.venv\Scripts\python.exe pc_agent.py --eyes HAPPY:SAD:5000
+
+# Idle-Tuning setzen (mehrfach moeglich)
+.\.venv\Scripts\python.exe pc_agent.py --tune drift_amp_px=2 --tune blink_interval_ms=3500
+
+# Rohbefehl senden (CMD-Payload)
+.\.venv\Scripts\python.exe pc_agent.py --cmd "STYLE:EVE_SUBTLE"
+```
+

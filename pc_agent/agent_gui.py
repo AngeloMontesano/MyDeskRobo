@@ -14,6 +14,7 @@ class AgentController:
         self._thread = None
         self._loop = None
         self._stop_event = None
+        self._control_queue = None
         self._lock = threading.Lock()
 
     def is_running(self) -> bool:
@@ -35,14 +36,28 @@ class AgentController:
         if loop is not None and stop_event is not None:
             loop.call_soon_threadsafe(stop_event.set)
 
+    def send_tune(self, key: str, value: int) -> bool:
+        with self._lock:
+            loop = self._loop
+            control_queue = self._control_queue
+        if loop is None or control_queue is None:
+            return False
+        try:
+            loop.call_soon_threadsafe(control_queue.put_nowait, ("tune", key, int(value)))
+            return True
+        except Exception:
+            return False
+
     def _run_thread(self, mode: str) -> None:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         stop_event = asyncio.Event()
+        control_queue: asyncio.Queue = asyncio.Queue()
 
         with self._lock:
             self._loop = loop
             self._stop_event = stop_event
+            self._control_queue = control_queue
 
         def status_callback(state: str, message: str) -> None:
             self.event_queue.put(("status", state, message))
@@ -53,6 +68,7 @@ class AgentController:
                     mode,
                     status_callback=status_callback,
                     stop_event=stop_event,
+                    control_queue=control_queue,
                 )
             )
             self.event_queue.put(("stopped", "", ""))
@@ -62,6 +78,7 @@ class AgentController:
             with self._lock:
                 self._loop = None
                 self._stop_event = None
+                self._control_queue = None
                 self._thread = None
             loop.close()
 
@@ -70,8 +87,8 @@ class AgentApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("DeskRobo PC Agent")
-        self.root.geometry("560x420")
-        self.root.minsize(520, 360)
+        self.root.geometry("620x560")
+        self.root.minsize(580, 500)
 
         self.event_queue: "queue.Queue[tuple]" = queue.Queue()
         self.controller = AgentController(self.event_queue)
@@ -79,6 +96,9 @@ class AgentApp:
         self.mode_var = tk.StringVar(value="basic")
         self.state_var = tk.StringVar(value="Nicht gestartet")
         self.detail_var = tk.StringVar(value="")
+        self.gyro_xy_var = tk.StringVar(value="62")
+        self.gyro_z_var = tk.StringVar(value="64")
+        self.gyro_cd_var = tk.StringVar(value="2200")
 
         self._build_ui()
         self._update_buttons()
@@ -113,6 +133,29 @@ class AgentApp:
 
         ttk.Label(status, textvariable=self.state_var, font=("Segoe UI", 11, "bold")).pack(anchor="w")
         ttk.Label(status, textvariable=self.detail_var).pack(anchor="w", pady=(4, 0))
+
+        tune = ttk.LabelFrame(container, text="Gyro / Confused Tuning", padding=12)
+        tune.pack(fill=tk.X, pady=(8, 8))
+
+        grid = ttk.Frame(tune)
+        grid.pack(fill=tk.X)
+
+        ttk.Label(grid, text="Tilt XY Schwelle (%)").grid(row=0, column=0, sticky="w")
+        ttk.Entry(grid, textvariable=self.gyro_xy_var, width=10).grid(row=0, column=1, padx=(8, 16), sticky="w")
+
+        ttk.Label(grid, text="Tilt Z Schwelle (%)").grid(row=0, column=2, sticky="w")
+        ttk.Entry(grid, textvariable=self.gyro_z_var, width=10).grid(row=0, column=3, padx=(8, 0), sticky="w")
+
+        ttk.Label(grid, text="Cooldown (ms)").grid(row=1, column=0, sticky="w", pady=(8, 0))
+        ttk.Entry(grid, textvariable=self.gyro_cd_var, width=10).grid(row=1, column=1, padx=(8, 16), sticky="w", pady=(8, 0))
+
+        self.apply_tune_btn = ttk.Button(tune, text="Gyro-Werte anwenden", command=self._on_apply_gyro_tuning)
+        self.apply_tune_btn.pack(anchor="w", pady=(10, 0))
+
+        ttk.Label(
+            tune,
+            text="Hinweis: Funktioniert nur, wenn der Agent bereits gestartet und verbunden ist.",
+        ).pack(anchor="w", pady=(6, 0))
 
         log_frame = ttk.LabelFrame(container, text="Ereignisse", padding=8)
         log_frame.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
@@ -163,10 +206,40 @@ class AgentApp:
         self._append_log("Stop angefordert.")
         self._update_buttons()
 
+    def _on_apply_gyro_tuning(self) -> None:
+        if not self.controller.is_running():
+            self._append_log("Gyro-Tuning nicht gesendet: Agent ist nicht gestartet.")
+            return
+
+        try:
+            xy = int(self.gyro_xy_var.get().strip())
+            z = int(self.gyro_z_var.get().strip())
+            cooldown = int(self.gyro_cd_var.get().strip())
+        except ValueError:
+            self._append_log("Ungueltige Gyro-Werte: Bitte nur ganze Zahlen eingeben.")
+            return
+
+        payloads = [
+            ("gyro_tilt_xy_pct", xy),
+            ("gyro_tilt_z_pct", z),
+            ("gyro_tilt_cooldown_ms", cooldown),
+        ]
+
+        sent = 0
+        for key, value in payloads:
+            if self.controller.send_tune(key, value):
+                sent += 1
+
+        if sent == len(payloads):
+            self._append_log(f"Gyro-Tuning gesendet: XY={xy}, Z={z}, Cooldown={cooldown}ms")
+        else:
+            self._append_log("Gyro-Tuning nur teilweise gesendet. Bitte Verbindung pruefen.")
+
     def _update_buttons(self) -> None:
         running = self.controller.is_running()
         self.start_btn.configure(state=("disabled" if running else "normal"))
         self.stop_btn.configure(state=("normal" if running else "disabled"))
+        self.apply_tune_btn.configure(state=("normal" if running else "disabled"))
 
     def _poll_events(self) -> None:
         while True:

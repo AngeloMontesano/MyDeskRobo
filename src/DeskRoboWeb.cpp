@@ -53,7 +53,9 @@ small{opacity:0.6;font-size:0.8rem;display:block;margin-top:8px}
 <div class=card><h3>Emotion</h3><div class=grid id=emo></div></div>
 <div class=card><h3>Eye Style</h3>
 <div class=grid>
-<button onclick="setStyle('EVE')">EVE</button>
+<button onclick="setStyle('EVE_SUBTLE')">EVE Subtle</button>
+<button onclick="setStyle('EVE_CINEMATIC')">EVE Cinematic</button>
+<button onclick="setStyle('EVE_COMIC')">EVE Comic</button>
 <button onclick="setStyle('ROUND')">Round (Eilik)</button>
 </div>
 <small>Style applies instantly.</small>
@@ -109,22 +111,25 @@ small{opacity:0.6;font-size:0.8rem;display:block;margin-top:8px}
 <div class=card><h3>Idle Bewegung anpassen</h3>
 <small style="margin-top:0">Hier stellst du ein, wie ruhig oder lebendig die Augen im Leerlauf wirken.</small>
 <div class=grid>
-<input id=t_drift_amp_px type=number placeholder="Blickdrift StÃƒÂ¤rke (px)">
+<input id=t_drift_amp_px type=number placeholder="Blickdrift StÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¤rke (px)">
 <input id=t_saccade_amp_px type=number placeholder="Sakkaden Sprungweite (px)">
 <input id=t_saccade_min_ms type=number placeholder="Sakkaden min Intervall (ms)">
 <input id=t_saccade_max_ms type=number placeholder="Sakkaden max Intervall (ms)">
 <input id=t_blink_interval_ms type=number placeholder="Blink Intervall (ms)">
 <input id=t_blink_duration_ms type=number placeholder="Blink Dauer (ms)">
 <input id=t_double_blink_chance_pct type=number placeholder="Doppelblink Chance (%)">
-<input id=t_glow_pulse_amp type=number placeholder="Glow Puls StÃƒÂ¤rke">
+<input id=t_glow_pulse_amp type=number placeholder="Glow Puls Staerke">
 <input id=t_glow_pulse_period_ms type=number placeholder="Glow Puls Periode (ms)">
+<input id=t_gyro_tilt_xy_pct type=number placeholder="Gyro Tilt XY Schwelle (%)">
+<input id=t_gyro_tilt_z_pct type=number placeholder="Gyro Tilt Z Schwelle (%)">
+<input id=t_gyro_tilt_cooldown_ms type=number placeholder="Gyro Tilt Cooldown (ms)">
 </div>
 <div style="margin-top:15px" class=grid>
 <button onclick="applyTune()">Werte anwenden</button>
 <button onclick="saveTune()">Als Standard speichern</button>
 <button onclick="loadTune()">Gespeicherte Werte laden</button>
 </div>
-<small>Tipps: Kleinere Werte wirken ruhiger, grÃƒÂ¶ÃƒÅ¸ere Werte lebendiger.</small>
+<small>Tipps: Kleinere Werte wirken ruhiger, grÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¶ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ere Werte lebendiger.</small>
 <div id=tuneState style="margin-top:10px;font-size:0.9rem;color:#4ade80"></div>
 </div>
 <div class=card><h3>OTA Update</h3>
@@ -210,9 +215,11 @@ async function setDebugStatusLabel(visible){
  await fetch('/api/debug/status_label?visible='+(visible?1:0),{method:'POST'});
 }
 async function refreshTune(){const r=await fetch('/api/tune/get');const t=await r.json();
- for(const k of Object.keys(t)){const el=document.getElementById('t_'+k);if(el)el.value=t[k];}}
+  const keys=['drift_amp_px','saccade_amp_px','saccade_min_ms','saccade_max_ms','blink_interval_ms','blink_duration_ms','double_blink_chance_pct','glow_pulse_amp','glow_pulse_period_ms','gyro_tilt_xy_pct','gyro_tilt_z_pct','gyro_tilt_cooldown_ms'];
+  for(const k of keys){const el=document.getElementById('t_'+k);if(el && (k in t))el.value=t[k];}
+}
 async function applyTune(){
- const keys=['drift_amp_px','saccade_amp_px','saccade_min_ms','saccade_max_ms','blink_interval_ms','blink_duration_ms','double_blink_chance_pct','glow_pulse_amp','glow_pulse_period_ms'];
+  const keys=['drift_amp_px','saccade_amp_px','saccade_min_ms','saccade_max_ms','blink_interval_ms','blink_duration_ms','double_blink_chance_pct','glow_pulse_amp','glow_pulse_period_ms','gyro_tilt_xy_pct','gyro_tilt_z_pct','gyro_tilt_cooldown_ms'];
  let ok=0;
  for(const k of keys){const el=document.getElementById('t_'+k);if(!el)continue;
    const v=parseInt(el.value,10);if(Number.isNaN(v))continue;

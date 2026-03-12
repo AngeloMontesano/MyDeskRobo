@@ -21,7 +21,7 @@ AnimeFace::AnimeFace()
       use_pair_override_(false),
       left_override_(EMOTION_IDLE),
       right_override_(EMOTION_IDLE),
-      style_(FACE_STYLE_EVE) {
+      style_(FACE_STYLE_EVE_CINEMATIC) {
   tuning_.drift_amp_px = 2;
   tuning_.saccade_amp_px = 4;
   tuning_.saccade_min_ms = 900;
@@ -276,10 +276,14 @@ void AnimeFace::drawMouth(int16_t cx, int16_t cy, Emotion e, bool blink) {
 }
 
 void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool blink) {
-  // EVE styling tweaks
-  int16_t w = 60; // slightly wider than old eve
-  int16_t h = 114; // slightly taller
-  lv_color_t color = lv_color_make(0x0F, 0xDA, 0xFF); // slightly brighter cyan
+  const bool subtle_style = (style_ == FACE_STYLE_EVE_SUBTLE);
+  const bool comic_style = (style_ == FACE_STYLE_EVE_COMIC);
+
+  int16_t w = subtle_style ? 56 : (comic_style ? 66 : 60);
+  int16_t h = subtle_style ? 104 : (comic_style ? 120 : 114);
+  lv_color_t color = subtle_style ? lv_color_make(0x0C, 0xC8, 0xEF)
+                                : (comic_style ? lv_color_make(0x2A, 0xEA, 0xFF)
+                                               : lv_color_make(0x0F, 0xDA, 0xFF));
   bool carve_top = false;
   int16_t carve_h = 0;
   int16_t carve_dx = 0;
@@ -290,145 +294,251 @@ void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool
   int16_t carve_bottom_h = 0;
   bool add_side_shadow = true;
   const lv_color_t bg = lv_color_hex(0x06080D);
-  const uint8_t idle_phase = (uint8_t) ((millis() / 2400U) % 4U);
+  const uint8_t idle_phase = (uint8_t)((millis() / 2400U) % 4U);
 
-  // Default blink behavior overrides height
   if (blink && (e != EMOTION_WOW)) {
     h = 8;
   }
 
   switch (e) {
     case EMOTION_HAPPY:
-      h = blink ? h : 84;
-      carve_bottom = !blink;
-      carve_bottom_h = 35;
-      cy += 15;
+      if (subtle_style) {
+        h = blink ? h : 80;
+        w = 54;
+        carve_bottom = !blink;
+        carve_bottom_h = 30;
+        cy += 12;
+      } else if (comic_style) {
+        h = blink ? h : 92;
+        w = 70;
+        carve_bottom = !blink;
+        carve_bottom_h = 44;
+        cy += 18;
+      } else {
+        h = blink ? h : 84;
+        carve_bottom = !blink;
+        carve_bottom_h = 35;
+        cy += 15;
+      }
       break;
     case EMOTION_SAD:
-      h = blink ? h : 94;
-      w = 56;
-      cy += 10;
-      carve_top = !blink;
-      carve_h = 16;
-      carve_dx = isRight ? 14 : -14;
-      carve_angle = isRight ? -120 : 120;
-      carve_bottom = !blink;
-      carve_bottom_h = 8;
-      add_side_shadow = false;
+      if (subtle_style) {
+        h = blink ? h : 86;
+        w = 54;
+        cy += 8;
+        carve_top = !blink;
+        carve_h = 12;
+        carve_dx = isRight ? 10 : -10;
+        carve_angle = isRight ? -90 : 90;
+        carve_bottom = !blink;
+        carve_bottom_h = 6;
+        add_side_shadow = false;
+      } else if (comic_style) {
+        h = blink ? h : 102;
+        w = 62;
+        cy += 12;
+        carve_top = !blink;
+        carve_h = 24;
+        carve_dx = isRight ? 18 : -18;
+        carve_angle = isRight ? -170 : 170;
+        carve_bottom = !blink;
+        carve_bottom_h = 10;
+      } else {
+        h = blink ? h : 94;
+        w = 56;
+        cy += 10;
+        carve_top = !blink;
+        carve_h = 16;
+        carve_dx = isRight ? 14 : -14;
+        carve_angle = isRight ? -120 : 120;
+        carve_bottom = !blink;
+        carve_bottom_h = 8;
+        add_side_shadow = false;
+      }
       break;
     case EMOTION_ANGRY:
-      h = blink ? h : 90;
-      w = 56;
-      cy += 4;
-      carve_top = !blink;
-      carve_h = 18;
-      carve_dx = isRight ? -14 : 14;
-      carve_angle = isRight ? 260 : -260;
-      carve_bottom = !blink;
-      carve_bottom_h = 6;
+      if (subtle_style) {
+        h = blink ? h : 84;
+        w = 54;
+        cy += 2;
+        carve_top = !blink;
+        carve_h = 12;
+        carve_dx = isRight ? -10 : 10;
+        carve_angle = isRight ? 190 : -190;
+        carve_bottom = !blink;
+        carve_bottom_h = 4;
+      } else if (comic_style) {
+        h = blink ? h : 96;
+        w = 62;
+        cy += 4;
+        carve_top = !blink;
+        carve_h = 26;
+        carve_dx = isRight ? -18 : 18;
+        carve_angle = isRight ? 360 : -360;
+        carve_bottom = !blink;
+        carve_bottom_h = 10;
+      } else {
+        h = blink ? h : 90;
+        w = 56;
+        cy += 4;
+        carve_top = !blink;
+        carve_h = 18;
+        carve_dx = isRight ? -14 : 14;
+        carve_angle = isRight ? 260 : -260;
+        carve_bottom = !blink;
+        carve_bottom_h = 6;
+      }
       break;
     case EMOTION_WOW:
-      w = 66;
-      h = 114;
+      w = subtle_style ? 62 : (comic_style ? 74 : 66);
+      h = subtle_style ? 108 : (comic_style ? 124 : 114);
       break;
     case EMOTION_SLEEPY:
-      h = blink ? h : 16;
-      w = 56;
+      h = blink ? h : (subtle_style ? 14 : (comic_style ? 18 : 16));
+      w = subtle_style ? 52 : (comic_style ? 60 : 56);
       cy += 35;
       add_side_shadow = false;
       break;
     case EMOTION_DIZZY:
-      h = blink ? h : 50;
-      w = 50;
+      h = blink ? h : (subtle_style ? 44 : (comic_style ? 58 : 50));
+      w = subtle_style ? 46 : (comic_style ? 56 : 50);
       if (!blink) {
         inner_clip = true;
-        clip_w = 40;
+        clip_w = subtle_style ? 36 : (comic_style ? 46 : 40);
         cx += isRight ? -10 : 10;
-        cy += (millis() / 50) % 20 < 10 ? -5 : 5; // swirly effect
+        cy += (millis() / 50) % 20 < 10 ? -5 : 5;
       }
       break;
     case EMOTION_CONFUSED:
-      w = 56;
+      w = subtle_style ? 54 : (comic_style ? 62 : 56);
       if (isRight) {
-        h = blink ? h : 60;
+        h = blink ? h : (subtle_style ? 56 : (comic_style ? 66 : 60));
         cy += 10;
       } else {
-        h = blink ? h : 110;
+        h = blink ? h : (subtle_style ? 104 : (comic_style ? 116 : 110));
       }
       break;
     case EMOTION_EXCITED:
-      w = 68;
-      h = blink ? h : 80;
-      carve_top = false;
+      w = subtle_style ? 62 : (comic_style ? 76 : 68);
+      h = blink ? h : (subtle_style ? 74 : (comic_style ? 88 : 80));
       carve_bottom = !blink;
-      carve_bottom_h = 15;
+      carve_bottom_h = subtle_style ? 12 : (comic_style ? 22 : 15);
       break;
     case EMOTION_MAIL:
       if (!blink) {
-        h = 60;
-        w = 90;
-        // The drawing logic for the mail envelope is handled at the end of the function,
-        // we'll make the core object transparent here.
+        h = subtle_style ? 54 : (comic_style ? 68 : 60);
+        w = subtle_style ? 84 : (comic_style ? 100 : 90);
       } else {
         h = 8;
-        w = 90;
+        w = subtle_style ? 84 : (comic_style ? 100 : 90);
       }
       break;
     case EMOTION_CALL:
       if (!blink) {
-        h = 80;
-        w = 80;
-        cx += (int)(sinf(millis() / 30.0f) * 4.0f); // Fast ringing wiggle
-        cy += (int)(cosf(millis() / 30.0f) * 4.0f);
-        // Drawing logic for phone handled at the end of the function.
+        h = subtle_style ? 74 : (comic_style ? 88 : 80);
+        w = subtle_style ? 74 : (comic_style ? 88 : 80);
+        const float wiggle = subtle_style ? 3.0f : (comic_style ? 6.0f : 4.0f);
+        cx += (int)(sinf(millis() / 30.0f) * wiggle);
+        cy += (int)(cosf(millis() / 30.0f) * wiggle);
       } else {
         h = 8;
-        w = 60;
+        w = subtle_style ? 56 : (comic_style ? 70 : 60);
       }
       break;
     case EMOTION_SHAKE:
-      h = blink ? h : 110;
-      w = 60;
-      // High speed bouncing
-      cx += (int)(sinf(millis() / 50.0f) * 80.0f);
-      cy += (int)(cosf(millis() / 70.0f) * 80.0f);
+      h = blink ? h : (subtle_style ? 102 : (comic_style ? 116 : 110));
+      w = subtle_style ? 56 : (comic_style ? 64 : 60);
+      cx += (int)(sinf(millis() / 50.0f) * (subtle_style ? 60.0f : (comic_style ? 95.0f : 80.0f)));
+      cy += (int)(cosf(millis() / 70.0f) * (subtle_style ? 60.0f : (comic_style ? 95.0f : 80.0f)));
       break;
     case EMOTION_IDLE:
     default:
       if (idle_phase == 0) {
-        h = blink ? 8 : 114;
-        w = 56;
-        cy += (int)(sinf(millis() / 500.0f) * 6.0f); // gentle vertical breathing
+        if (subtle_style) {
+          h = blink ? 8 : 106;
+          w = 54;
+          cy += (int)(sinf(millis() / 700.0f) * 4.0f);
+        } else if (comic_style) {
+          h = blink ? 8 : 118;
+          w = 66;
+          cy += (int)(sinf(millis() / 420.0f) * 9.0f);
+        } else {
+          h = blink ? 8 : 114;
+          w = 56;
+          cy += (int)(sinf(millis() / 500.0f) * 6.0f);
+        }
       } else if (idle_phase == 1) {
-        h = blink ? 8 : 106;
-        w = 60;
-        cy += 3;
-        carve_top = !blink;
-        carve_h = 10;
-        cx += (int)(sinf(millis() / 800.0f) * 16.0f); // slow side look
+        if (subtle_style) {
+          h = blink ? 8 : 100;
+          w = 56;
+          cy += 2;
+          carve_top = !blink;
+          carve_h = 8;
+          cx += (int)(sinf(millis() / 1000.0f) * 10.0f);
+        } else if (comic_style) {
+          h = blink ? 8 : 110;
+          w = 68;
+          cy += 4;
+          carve_top = !blink;
+          carve_h = 14;
+          cx += (int)(sinf(millis() / 600.0f) * 22.0f);
+        } else {
+          h = blink ? 8 : 106;
+          w = 60;
+          cy += 3;
+          carve_top = !blink;
+          carve_h = 10;
+          cx += (int)(sinf(millis() / 800.0f) * 16.0f);
+        }
       } else if (idle_phase == 2) {
-        h = blink ? 8 : 98;
-        w = 64;
-        cy += 10;
-        add_side_shadow = false;
-        cx += (int)(sinf(millis() / 400.0f) * 12.0f); // circular rolling
-        cy -= (int)(cosf(millis() / 400.0f) * 12.0f);
+        if (subtle_style) {
+          h = blink ? 8 : 92;
+          w = 58;
+          cy += 8;
+          add_side_shadow = false;
+          cx += (int)(sinf(millis() / 520.0f) * 8.0f);
+          cy -= (int)(cosf(millis() / 520.0f) * 8.0f);
+        } else if (comic_style) {
+          h = blink ? 8 : 102;
+          w = 70;
+          cy += 12;
+          cx += (int)(sinf(millis() / 320.0f) * 16.0f);
+          cy -= (int)(cosf(millis() / 320.0f) * 16.0f);
+        } else {
+          h = blink ? 8 : 98;
+          w = 64;
+          cy += 10;
+          add_side_shadow = false;
+          cx += (int)(sinf(millis() / 400.0f) * 12.0f);
+          cy -= (int)(cosf(millis() / 400.0f) * 12.0f);
+        }
       } else {
-        h = blink ? 8 : 110;
-        w = 58;
-        cx -= (int)(sinf(millis() / 700.0f) * 10.0f); // gentle sway
+        if (subtle_style) {
+          h = blink ? 8 : 104;
+          w = 55;
+          cx -= (int)(sinf(millis() / 900.0f) * 7.0f);
+        } else if (comic_style) {
+          h = blink ? 8 : 114;
+          w = 64;
+          cx -= (int)(sinf(millis() / 520.0f) * 14.0f);
+        } else {
+          h = blink ? 8 : 110;
+          w = 58;
+          cx -= (int)(sinf(millis() / 700.0f) * 10.0f);
+        }
       }
       break;
   }
+
   if (w < 10) w = 10;
   if (h < 6) h = 6;
 
-  const int glow_pad = 8;
-  const int mid_pad = 3;
-  const int glow_base = 20;
-  const int glow_hi = 60;
-  const int mid_base = 86;
-  const int mid_hi = 140;
+  const int glow_pad = subtle_style ? 6 : (comic_style ? 10 : 8);
+  const int mid_pad = subtle_style ? 2 : (comic_style ? 4 : 3);
+  const int glow_base = subtle_style ? 14 : (comic_style ? 26 : 20);
+  const int glow_hi = subtle_style ? 46 : (comic_style ? 70 : 60);
+  const int mid_base = subtle_style ? 70 : (comic_style ? 96 : 86);
+  const int mid_hi = subtle_style ? 122 : (comic_style ? 156 : 140);
   const lv_coord_t eye_radius = LV_RADIUS_CIRCLE;
 
   lv_obj_t *glow = lv_obj_create(canvas_);
@@ -437,7 +547,7 @@ void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool
   lv_obj_set_pos(glow, cx - (w + glow_pad) / 2, cy - (h + glow_pad) / 2);
   lv_obj_set_style_radius(glow, eye_radius, 0);
   lv_obj_set_style_bg_color(glow, color, 0);
-  lv_obj_set_style_bg_opa(glow, (lv_opa_t) constrain(glow_base + pulse_shift_ / 4, 6, glow_hi), 0);
+  lv_obj_set_style_bg_opa(glow, (lv_opa_t)constrain(glow_base + pulse_shift_ / 4, 6, glow_hi), 0);
 
   lv_obj_t *mid = lv_obj_create(canvas_);
   lv_obj_remove_style_all(mid);
@@ -445,7 +555,7 @@ void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool
   lv_obj_set_pos(mid, cx - (w + mid_pad) / 2, cy - (h + mid_pad) / 2);
   lv_obj_set_style_radius(mid, eye_radius, 0);
   lv_obj_set_style_bg_color(mid, color, 0);
-  lv_obj_set_style_bg_opa(mid, (lv_opa_t) constrain(mid_base + pulse_shift_ / 4, 24, mid_hi), 0);
+  lv_obj_set_style_bg_opa(mid, (lv_opa_t)constrain(mid_base + pulse_shift_ / 4, 24, mid_hi), 0);
 
   lv_obj_t *core = lv_obj_create(canvas_);
   lv_obj_remove_style_all(core);
@@ -454,14 +564,13 @@ void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool
   lv_obj_set_style_radius(core, eye_radius, 0);
 
   if ((e == EMOTION_MAIL || e == EMOTION_CALL) && !blink) {
-     // Don't draw the regular eye core for these custom shapes
-     lv_obj_set_style_bg_opa(core, LV_OPA_TRANSP, 0);
-     lv_obj_set_style_bg_opa(glow, LV_OPA_TRANSP, 0);
-     lv_obj_set_style_bg_opa(mid, LV_OPA_TRANSP, 0);
-     add_side_shadow = false;
+    lv_obj_set_style_bg_opa(core, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_bg_opa(glow, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_bg_opa(mid, LV_OPA_TRANSP, 0);
+    add_side_shadow = false;
   } else {
-     lv_obj_set_style_bg_color(core, color, 0);
-     lv_obj_set_style_bg_opa(core, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(core, color, 0);
+    lv_obj_set_style_bg_opa(core, LV_OPA_COVER, 0);
   }
 
   if (carve_top && (carve_h > 0)) {
@@ -487,7 +596,6 @@ void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool
     lv_obj_set_style_bg_opa(clip, LV_OPA_COVER, 0);
   }
 
-
   if (carve_bottom && (carve_bottom_h > 0)) {
     lv_obj_t *cut = lv_obj_create(canvas_);
     lv_obj_remove_style_all(cut);
@@ -500,31 +608,33 @@ void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool
   if (add_side_shadow) {
     lv_obj_t *shadow = lv_obj_create(canvas_);
     lv_obj_remove_style_all(shadow);
-    const int16_t sw = 10;
+    const int16_t sw = subtle_style ? 8 : (comic_style ? 12 : 10);
     lv_obj_set_size(shadow, sw, h - 16);
     lv_obj_set_pos(shadow, cx + (isRight ? (w / 2 - sw / 2 + 2) : (-w / 2 - sw / 2 - 2)), cy - (h - 12) / 2);
     lv_obj_set_style_radius(shadow, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(shadow, lv_color_hex(0x1A2538), 0);
-    lv_obj_set_style_bg_opa(shadow, (lv_opa_t) 54, 0);
+    lv_obj_set_style_bg_opa(shadow, (lv_opa_t)54, 0);
   }
 
   if ((e == EMOTION_ANGRY) && !blink) {
     lv_obj_t *brow = lv_obj_create(canvas_);
     lv_obj_remove_style_all(brow);
-    lv_obj_set_size(brow, 36, 6);
-    lv_obj_set_pos(brow, cx - 18 + (isRight ? -1 : 1), cy - h / 2 - 12);
+    const int16_t brow_w = subtle_style ? 30 : (comic_style ? 44 : 36);
+    const int16_t brow_h = subtle_style ? 5 : (comic_style ? 8 : 6);
+    lv_obj_set_size(brow, brow_w, brow_h);
+    lv_obj_set_pos(brow, cx - brow_w / 2 + (isRight ? -1 : 1), cy - h / 2 - (subtle_style ? 10 : (comic_style ? 14 : 12)));
     lv_obj_set_style_radius(brow, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(brow, lv_color_hex(0x9FDFFF), 0);
+    lv_obj_set_style_bg_color(brow, comic_style ? lv_color_hex(0xBFF3FF) : lv_color_hex(0x9FDFFF), 0);
     lv_obj_set_style_bg_opa(brow, LV_OPA_COVER, 0);
-    lv_obj_set_style_transform_angle(brow, isRight ? 300 : -300, 0);
+    lv_obj_set_style_transform_angle(brow,
+      subtle_style ? (isRight ? 250 : -250) : (comic_style ? (isRight ? 360 : -360) : (isRight ? 300 : -300)), 0);
   }
 
   if (e == EMOTION_MAIL && !blink) {
-    // Draw an envelope explicitly using multiple objects
     lv_obj_t *body = lv_obj_create(canvas_);
     lv_obj_remove_style_all(body);
     lv_obj_set_size(body, w, h);
-    lv_obj_set_pos(body, cx - w/2, cy - h/2);
+    lv_obj_set_pos(body, cx - w / 2, cy - h / 2);
     lv_obj_set_style_radius(body, 6, 0);
     lv_obj_set_style_bg_color(body, bg, 0);
     lv_obj_set_style_bg_opa(body, LV_OPA_COVER, 0);
@@ -533,8 +643,8 @@ void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool
 
     lv_obj_t *flap = lv_obj_create(canvas_);
     lv_obj_remove_style_all(flap);
-    lv_obj_set_size(flap, w - 8, h/2 + 2);
-    lv_obj_set_pos(flap, cx - (w-8)/2, cy - h/2 - 2);
+    lv_obj_set_size(flap, w - 8, h / 2 + 2);
+    lv_obj_set_pos(flap, cx - (w - 8) / 2, cy - h / 2 - 2);
     lv_obj_set_style_bg_color(flap, bg, 0);
     lv_obj_set_style_bg_opa(flap, LV_OPA_COVER, 0);
     lv_obj_set_style_border_color(flap, color, 0);
@@ -542,22 +652,20 @@ void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool
     lv_obj_set_style_transform_angle(flap, 0, 0);
     lv_obj_set_style_radius(flap, 4, 0);
 
-    // Cover the top edge of the flap so it looks like a triangle coming down
     lv_obj_t *flap_mask = lv_obj_create(canvas_);
     lv_obj_remove_style_all(flap_mask);
-    lv_obj_set_size(flap_mask, w + 10, h/2);
-    lv_obj_set_pos(flap_mask, cx - (w+10)/2, cy - h/2 - h/4);
+    lv_obj_set_size(flap_mask, w + 10, h / 2);
+    lv_obj_set_pos(flap_mask, cx - (w + 10) / 2, cy - h / 2 - h / 4);
     lv_obj_set_style_bg_color(flap_mask, bg, 0);
     lv_obj_set_style_bg_opa(flap_mask, LV_OPA_COVER, 0);
     lv_obj_set_style_transform_angle(flap_mask, isRight ? 200 : -200, 0);
   }
 
   if (e == EMOTION_CALL && !blink) {
-    // Draw a phone handset explicitly
     lv_obj_t *handle = lv_obj_create(canvas_);
     lv_obj_remove_style_all(handle);
     lv_obj_set_size(handle, 16, h - 20);
-    lv_obj_set_pos(handle, cx - 8, cy - (h-20)/2);
+    lv_obj_set_pos(handle, cx - 8, cy - (h - 20) / 2);
     lv_obj_set_style_radius(handle, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(handle, color, 0);
     lv_obj_set_style_bg_opa(handle, LV_OPA_COVER, 0);
@@ -565,7 +673,7 @@ void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool
     lv_obj_t *top_speaker = lv_obj_create(canvas_);
     lv_obj_remove_style_all(top_speaker);
     lv_obj_set_size(top_speaker, 36, 16);
-    lv_obj_set_pos(top_speaker, cx - 18, cy - h/2 + 4);
+    lv_obj_set_pos(top_speaker, cx - 18, cy - h / 2 + 4);
     lv_obj_set_style_radius(top_speaker, 8, 0);
     lv_obj_set_style_bg_color(top_speaker, color, 0);
     lv_obj_set_style_bg_opa(top_speaker, LV_OPA_COVER, 0);
@@ -574,7 +682,7 @@ void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool
     lv_obj_t *bot_speaker = lv_obj_create(canvas_);
     lv_obj_remove_style_all(bot_speaker);
     lv_obj_set_size(bot_speaker, 36, 16);
-    lv_obj_set_pos(bot_speaker, cx - 18, cy + h/2 - 20);
+    lv_obj_set_pos(bot_speaker, cx - 18, cy + h / 2 - 20);
     lv_obj_set_style_radius(bot_speaker, 8, 0);
     lv_obj_set_style_bg_color(bot_speaker, color, 0);
     lv_obj_set_style_bg_opa(bot_speaker, LV_OPA_COVER, 0);
