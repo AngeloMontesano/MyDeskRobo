@@ -443,6 +443,8 @@ bool DeskRobo_SaveTuning() {
                  s_face.getTuningValue("double_blink_chance_pct"));
   s_prefs.putInt("glow_pulse_amp", s_face.getTuningValue("glow_pulse_amp"));
   s_prefs.putInt("glow_pulse_ms", s_face.getTuningValue("glow_pulse_period_ms"));
+  s_prefs.putInt("shake_amp_px", s_face.getTuningValue("shake_amp_px"));
+  s_prefs.putInt("shake_period_ms", s_face.getTuningValue("shake_period_ms"));
   s_prefs.putInt("gyro_tilt_xy_pct", s_gyro_tilt_xy_pct);
   s_prefs.putInt("gyro_tilt_z_pct", s_gyro_tilt_z_pct);
   s_prefs.putInt("gyro_tilt_cooldown", s_gyro_tilt_cooldown_ms);
@@ -471,6 +473,10 @@ bool DeskRobo_LoadTuning() {
       "glow_pulse_amp", s_face.getTuningValue("glow_pulse_amp"));
   const int glow_pulse_period_ms = s_prefs.getInt(
       "glow_pulse_ms", s_face.getTuningValue("glow_pulse_period_ms"));
+  const int shake_amp_px = s_prefs.getInt(
+      "shake_amp_px", s_face.getTuningValue("shake_amp_px"));
+  const int shake_period_ms = s_prefs.getInt(
+      "shake_period_ms", s_face.getTuningValue("shake_period_ms"));
   const int gyro_tilt_xy_pct = s_prefs.getInt("gyro_tilt_xy_pct", s_gyro_tilt_xy_pct);
   const int gyro_tilt_z_pct = s_prefs.getInt("gyro_tilt_z_pct", s_gyro_tilt_z_pct);
   const int gyro_tilt_cooldown_ms =
@@ -493,6 +499,8 @@ bool DeskRobo_LoadTuning() {
   DeskRobo_SetTuning("double_blink_chance_pct", double_blink_chance_pct);
   DeskRobo_SetTuning("glow_pulse_amp", glow_pulse_amp);
   DeskRobo_SetTuning("glow_pulse_period_ms", glow_pulse_period_ms);
+  DeskRobo_SetTuning("shake_amp_px", shake_amp_px);
+  DeskRobo_SetTuning("shake_period_ms", shake_period_ms);
   DeskRobo_SetTuning("gyro_tilt_xy_pct", gyro_tilt_xy_pct);
   DeskRobo_SetTuning("gyro_tilt_z_pct", gyro_tilt_z_pct);
   DeskRobo_SetTuning("gyro_tilt_cooldown_ms", gyro_tilt_cooldown_ms);

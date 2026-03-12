@@ -45,6 +45,8 @@ class AnimeFace {
     int double_blink_chance_pct;
     int glow_pulse_amp;
     int glow_pulse_period_ms;
+    int shake_amp_px;
+    int shake_period_ms;
   };
 
   AnimeFace();

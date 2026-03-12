@@ -37,6 +37,8 @@ TUNE_KEYS = [
     "double_blink_chance_pct",
     "glow_pulse_amp",
     "glow_pulse_period_ms",
+    "shake_amp_px",
+    "shake_period_ms",
     "gyro_tilt_xy_pct",
     "gyro_tilt_z_pct",
     "gyro_tilt_cooldown_ms",
@@ -52,6 +54,8 @@ TUNE_DEFAULTS = {
     "double_blink_chance_pct": "20",
     "glow_pulse_amp": "6",
     "glow_pulse_period_ms": "2600",
+    "shake_amp_px": "24",
+    "shake_period_ms": "700",
     "gyro_tilt_xy_pct": "62",
     "gyro_tilt_z_pct": "64",
     "gyro_tilt_cooldown_ms": "2200",
@@ -254,14 +258,37 @@ class AgentApp:
         frame = ttk.LabelFrame(parent, text="Idle Bewegung anpassen", padding=10)
         frame.pack(fill=tk.BOTH, expand=True)
 
+        labels = {
+            "drift_amp_px": "Blickdrift Staerke (px)",
+            "saccade_amp_px": "Sakkaden Sprungweite (px)",
+            "saccade_min_ms": "Sakkaden min Intervall (ms)",
+            "saccade_max_ms": "Sakkaden max Intervall (ms)",
+            "blink_interval_ms": "Blink Intervall (ms)",
+            "blink_duration_ms": "Blink Dauer (ms)",
+            "double_blink_chance_pct": "Doppelblink Chance (%)",
+            "glow_pulse_amp": "Glow Puls Staerke",
+            "glow_pulse_period_ms": "Glow Puls Periode (ms)",
+            "shake_amp_px": "Shake Amplitude (px)",
+            "shake_period_ms": "Shake Geschwindigkeit (ms)",
+            "gyro_tilt_xy_pct": "Gyro Tilt XY Schwelle (%)",
+            "gyro_tilt_z_pct": "Gyro Tilt Z Schwelle (%)",
+            "gyro_tilt_cooldown_ms": "Gyro Tilt Cooldown (ms)",
+        }
+
         for i, key in enumerate(TUNE_KEYS):
             r = i // 2
             c = (i % 2) * 2
-            ttk.Label(frame, text=key).grid(row=r, column=c, sticky="w", padx=(0, 8), pady=4)
+            ttk.Label(frame, text=labels.get(key, key)).grid(row=r, column=c, sticky="w", padx=(0, 8), pady=4)
             ttk.Entry(frame, textvariable=self.tune_vars[key], width=16).grid(row=r, column=c + 1, sticky="w", pady=4)
 
+        presets = ttk.Frame(frame)
+        presets.grid(row=7, column=0, columnspan=4, sticky="w", pady=(8, 0))
+        ttk.Button(presets, text="Preset Ruhig", command=lambda: self._apply_tune_preset("calm")).pack(side=tk.LEFT)
+        ttk.Button(presets, text="Preset Standard", command=lambda: self._apply_tune_preset("balanced")).pack(side=tk.LEFT, padx=8)
+        ttk.Button(presets, text="Preset Lebhaft", command=lambda: self._apply_tune_preset("lively")).pack(side=tk.LEFT)
+
         btns = ttk.Frame(frame)
-        btns.grid(row=7, column=0, columnspan=4, sticky="w", pady=(12, 0))
+        btns.grid(row=8, column=0, columnspan=4, sticky="w", pady=(12, 0))
         ttk.Button(btns, text="Werte anwenden", command=self._on_apply_tune).pack(side=tk.LEFT)
         ttk.Button(btns, text="Als Standard speichern", command=self._on_save_tune).pack(side=tk.LEFT, padx=8)
         ttk.Button(btns, text="Gespeicherte Werte laden", command=self._on_load_tune).pack(side=tk.LEFT)
@@ -372,6 +399,34 @@ class AgentApp:
         if self._send("cmd", payload):
             self._append_log(f"Raw CMD gesendet: {payload}")
 
+    def _apply_tune_preset(self, name: str) -> None:
+        presets = {
+            "calm": {
+                "drift_amp_px": 1, "saccade_amp_px": 2, "saccade_min_ms": 2200, "saccade_max_ms": 5200,
+                "blink_interval_ms": 5200, "blink_duration_ms": 100, "double_blink_chance_pct": 8,
+                "glow_pulse_amp": 4, "glow_pulse_period_ms": 3200, "shake_amp_px": 14, "shake_period_ms": 900,
+                "gyro_tilt_xy_pct": 72, "gyro_tilt_z_pct": 74, "gyro_tilt_cooldown_ms": 2800,
+            },
+            "balanced": {
+                "drift_amp_px": 2, "saccade_amp_px": 5, "saccade_min_ms": 1400, "saccade_max_ms": 3800,
+                "blink_interval_ms": 3600, "blink_duration_ms": 120, "double_blink_chance_pct": 20,
+                "glow_pulse_amp": 6, "glow_pulse_period_ms": 2600, "shake_amp_px": 24, "shake_period_ms": 700,
+                "gyro_tilt_xy_pct": 62, "gyro_tilt_z_pct": 64, "gyro_tilt_cooldown_ms": 2200,
+            },
+            "lively": {
+                "drift_amp_px": 4, "saccade_amp_px": 8, "saccade_min_ms": 900, "saccade_max_ms": 2500,
+                "blink_interval_ms": 2800, "blink_duration_ms": 130, "double_blink_chance_pct": 30,
+                "glow_pulse_amp": 10, "glow_pulse_period_ms": 2000, "shake_amp_px": 32, "shake_period_ms": 520,
+                "gyro_tilt_xy_pct": 56, "gyro_tilt_z_pct": 58, "gyro_tilt_cooldown_ms": 1600,
+            },
+        }
+        p = presets.get(name)
+        if not p:
+            return
+        for key, value in p.items():
+            if key in self.tune_vars:
+                self.tune_vars[key].set(str(value))
+        self._on_apply_tune()
     def _on_apply_tune(self) -> None:
         sent = 0
         for key in TUNE_KEYS:
