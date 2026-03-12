@@ -22,12 +22,15 @@ Core responsibilities:
 6. LVGL init
 7. DeskRobo MVP init
 8. Web AP/server init
-9. BLE init
+9. Connectivity policy: wait up to 60s for STA WLAN; then start BLE
+   - if WLAN connected in 60s: keep Wi-Fi on
+   - if WLAN not connected in 60s: disable Wi-Fi (AP+STA)
 
 Main loop:
 - `DeskRobo_Loop()`
 - `DeskRoboWeb_Loop()`
-- `DeskRoboBLE_Loop()`
+- boot connectivity policy check (WLAN timeout/BLE fallback)
+- `DeskRoboBLE_Loop()` (after BLE init)
 - `Lvgl_Loop()`
 
 ## 2.2 Modules
@@ -94,7 +97,9 @@ Examples:
 
 ## 5. Web API
 
-Base: AP mode (`DeskRobo-Setup`) at `http://192.168.4.1/`
+Base (while Wi-Fi is active): AP mode (`DeskRobo-Setup`) at `http://192.168.4.1/`
+
+Boot policy note: if no STA WLAN connection is established within 60 seconds after boot, Wi-Fi is disabled (AP+STA off) and BLE starts.
 
 - `GET /api/status`
 - `POST /api/emotion?name=<EMOTION>&hold=<ms>`

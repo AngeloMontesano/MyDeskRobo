@@ -28,7 +28,13 @@ Gyro reactions are currently disabled for stability.
 
 ## 3) AP + Web Control
 
-The device starts its own Wi-Fi AP:
+Boot connectivity policy:
+
+- Device waits up to 60s for STA WLAN connection.
+- If STA WLAN connects in time: BLE starts and Wi-Fi remains active.
+- If STA WLAN does not connect in 60s: Wi-Fi is fully disabled (AP+STA off) and BLE starts.
+
+During setup window (before Wi-Fi timeout):
 
 - SSID: `DeskRobo-Setup`
 - Password: `deskrobo123`
@@ -37,6 +43,8 @@ The device starts its own Wi-Fi AP:
 Open in browser:
 
 - `http://192.168.4.1/`
+
+If AP timed out, reboot the device to reopen setup AP.
 
 ## 4) HTTP API
 
@@ -122,6 +130,8 @@ Expected boot lines include:
 
 - `[WEB] AP started: DeskRobo-Setup IP=...`
 - `[WEB] HTTP server started`
+- `[BOOT] Waiting up to 60s for WLAN before BLE fallback`
+- either `[BOOT] WLAN connected within 60s -> BLE start` or `[BOOT] WLAN timeout after 60s -> WiFi off + BLE start`
 
 ## 7) Current Stability Flags
 

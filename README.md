@@ -17,6 +17,13 @@ This repository contains:
 - BLE command path (for PC agent)
 - backlight control from web UI (`0..100`)
 
+## Connectivity Policy
+
+- On boot, DeskRobo waits up to 60 seconds for STA WLAN connection.
+- If WLAN connects within 60s: BLE starts and Wi-Fi stays active.
+- If WLAN does not connect within 60s: Wi-Fi (AP+STA) is turned off and BLE starts.
+- AP auto-off is still active: AP is disabled after 9 minutes when no AP clients are connected.
+
 ## Hardware / Software Baseline
 
 - Board: Waveshare ESP32-S3-LCD-1.85
@@ -35,12 +42,14 @@ chcp 65001 > $null
 & "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run -t upload
 ```
 
-2. Connect to AP:
+2. Connect to AP (within the first 60s after boot if no STA WLAN is connected):
 - SSID: `DeskRobo-Setup`
 - Password: `deskrobo123`
 
 3. Open:
 - `http://192.168.4.1/`
+
+Note: if Wi-Fi timed out and was turned off, reboot DeskRobo to reopen the setup AP window.
 
 ## Main API Endpoints
 
