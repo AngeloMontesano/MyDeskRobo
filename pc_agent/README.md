@@ -71,3 +71,9 @@ Ergebnis: `pc_agent\dist\DeskRoboAgent.exe`
 - `14` NOTIFY
 - `15` LOCK
 - `16` WIFI
+
+## BLE Zeitsync
+
+- Beim Verbinden sendet der Agent automatisch die aktuelle Unix-Zeit an DeskRobo (TIME:<seq>:<epoch>).
+- Danach erfolgt periodische Nachsynchronisierung (Standard: alle 10 Minuten).
+- Bei Fehler wird nach 30 Sekunden erneut versucht (konfigurierbar in config.py).

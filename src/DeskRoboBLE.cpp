@@ -1,4 +1,4 @@
-﻿#include "DeskRoboBLE.h"
+#include "DeskRoboBLE.h"
 
 #include <Arduino.h>
 #include <BLEDevice.h>
@@ -6,6 +6,9 @@
 #include <BLEUtils.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
+#include <sys/time.h>
+#include <time.h>
+#include <stdlib.h>
 
 #include "DeskRoboMVP.h"
 
@@ -25,6 +28,7 @@ enum CmdType : uint8_t {
   CMD_SET_EMOTION = 1,
   CMD_PUSH_EVENT = 2,
   CMD_SET_EYES = 3,
+  CMD_SET_TIME = 4,
 };
 
 struct BleCmd {
@@ -204,6 +208,25 @@ void handleTextCommand(String cmd) {
     return;
   }
 
+  if (u.startsWith("TIME:")) {
+    const int p1 = u.indexOf(':', 5);
+    if (p1 < 0) return;
+
+    uint32_t seq = 0;
+    uint32_t epoch_s = 0;
+    const bool seq_ok = parseUint32Strict(u.substring(5, p1), seq);
+    const bool epoch_ok = parseUint32Strict(u.substring(p1 + 1), epoch_s);
+
+    bool ok = false;
+    if (seq_ok && epoch_ok) {
+      ok = enqueueCmd({CMD_SET_TIME, 0, 0, epoch_s});
+      Serial.printf("[BLE] rx time seq=%lu unix=%lu ok=%u\n",
+                    (unsigned long)seq, (unsigned long)epoch_s, ok ? 1u : 0u);
+      notifyAck(seq, ok);
+    }
+    return;
+  }
+
   if (u.startsWith("EVENT:")) {
     const String name = u.substring(6);
     DeskRoboEventType ev;
@@ -315,6 +338,18 @@ void DeskRoboBLE_Loop() {
         DeskRobo_SetEyePair((DeskRoboEmotion)cmd.a, (DeskRoboEmotion)cmd.b,
                             cmd.hold_ms);
         break;
+      case CMD_SET_TIME: {
+        // Keep the same TZ behavior as NTP setup so local time display matches.
+        setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
+        tzset();
+
+        const time_t epoch = (time_t)cmd.hold_ms;
+        struct timeval tv = {.tv_sec = epoch, .tv_usec = 0};
+        const bool ok = (settimeofday(&tv, nullptr) == 0);
+        Serial.printf("[BLE] apply time unix=%lu ok=%u\n",
+                      (unsigned long)cmd.hold_ms, ok ? 1u : 0u);
+        break;
+      }
       default:
         break;
     }
@@ -326,7 +361,3 @@ void DeskRoboBLE_Loop() {
     DeskRobo_SetBleConnected(g_device_connected);
   }
 }
-
-
-
-

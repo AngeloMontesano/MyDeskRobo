@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from typing import Callable, Dict, Optional
 
 from bleak import BleakClient, BleakScanner
@@ -14,6 +15,8 @@ from config import (
     BLE_RECONNECT_DELAY_S,
     BLE_SCAN_TIMEOUT_S,
     BLE_SERVICE_UUID,
+    BLE_TIME_SYNC_INTERVAL_S,
+    BLE_TIME_SYNC_RETRY_S,
     BLE_WRITE_RETRIES,
     BLE_WRITE_RETRY_DELAY_S,
 )
@@ -32,6 +35,7 @@ class BleClient:
         self._ack_waiters: Dict[int, asyncio.Future] = {}
         self._pong_waiters: Dict[int, asyncio.Future] = {}
         self._status_callback = status_callback
+        self._next_time_sync_monotonic = 0.0
 
     @property
     def is_connected(self) -> bool:
@@ -184,6 +188,43 @@ class BleClient:
         finally:
             self._pong_waiters.pop(seq, None)
 
+    async def send_time_sync(self, epoch_s: Optional[int] = None) -> bool:
+        epoch_s = int(time.time() if epoch_s is None else epoch_s)
+        if epoch_s <= 0:
+            return False
+
+        async with self._lock:
+            if not await self.wait_connected():
+                LOG.warning("skip time sync (not connected)")
+                return False
+
+            seq = self._next_seq()
+            fut: Optional[asyncio.Future] = None
+
+            try:
+                if self._notify_enabled:
+                    fut = asyncio.get_running_loop().create_future()
+                    self._ack_waiters[seq] = fut
+
+                await self._write_text(f"TIME:{seq}:{epoch_s}")
+
+                if self._notify_enabled and fut is not None:
+                    ok = bool(await asyncio.wait_for(fut, timeout=BLE_ACK_TIMEOUT_S))
+                    if ok:
+                        LOG.info("tx time sync epoch=%d seq=%d ack=ok", epoch_s, seq)
+                    else:
+                        LOG.warning("tx time sync epoch=%d seq=%d ack=nack", epoch_s, seq)
+                    return ok
+
+                LOG.info("tx time sync epoch=%d seq=%d (notify off)", epoch_s, seq)
+                return True
+            except Exception as exc:
+                LOG.warning("time sync failed: %s", exc)
+                self._connected_event.clear()
+                return False
+            finally:
+                self._ack_waiters.pop(seq, None)
+
     async def send_emotion(self, emotion: int) -> bool:
         emotion = int(emotion) & 0xFF
 
@@ -248,8 +289,16 @@ class BleClient:
             try:
                 if not self.is_connected:
                     await self.connect()
+                    self._next_time_sync_monotonic = 0.0
                     await asyncio.sleep(0.2)
                     continue
+
+                now = time.monotonic()
+                if now >= self._next_time_sync_monotonic:
+                    synced = await self.send_time_sync()
+                    self._next_time_sync_monotonic = now + (
+                        BLE_TIME_SYNC_INTERVAL_S if synced else BLE_TIME_SYNC_RETRY_S
+                    )
 
                 if not await self.send_ping():
                     self._emit_status("heartbeat_timeout", "Heartbeat-Timeout")

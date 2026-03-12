@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 # BLE
 BLE_DEVICE_NAME = "MyRoboDesk"
@@ -12,6 +12,8 @@ BLE_HEARTBEAT_S = 5.0
 BLE_WRITE_RETRIES = 3
 BLE_WRITE_RETRY_DELAY_S = 0.35
 BLE_CONNECT_WAIT_S = 2.0
+BLE_TIME_SYNC_INTERVAL_S = 10 * 60
+BLE_TIME_SYNC_RETRY_S = 30
 
 # Event timings
 IDLE_AFTER_NOTIFY_MS = 8000
