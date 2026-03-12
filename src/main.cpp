@@ -1,4 +1,4 @@
-#include <Arduino.h>
+﻿#include <Arduino.h>
 
 #include "LVGL_Arduino/BAT_Driver.h"
 #include "LVGL_Arduino/Display_ST77916.h"
@@ -19,6 +19,17 @@
 #ifndef DESKROBO_GYRO_SAFE_PROBE
 #define DESKROBO_GYRO_SAFE_PROBE 0
 #endif
+
+static volatile bool g_ble_ready = false;
+
+static void BleInitTask(void *param) {
+  (void)param;
+  vTaskDelay(pdMS_TO_TICKS(10UL * 60UL * 1000UL));
+  DeskRoboBLE_Init();
+  g_ble_ready = true;
+  Serial.println("[BOOT] DeskRobo BLE ready");
+  vTaskDelete(nullptr);
+}
 
 static void Gyro_SafeProbe() {
   uint8_t who = 0;
@@ -81,8 +92,15 @@ void setup() {
   Serial.println("[BOOT] DeskRobo MVP ready");
   DeskRoboWeb_Init();
   Serial.println("[BOOT] DeskRobo Web ready");
-  DeskRoboBLE_Init();
-  Serial.println("[BOOT] DeskRobo BLE ready");
+
+  const BaseType_t ble_task_ok =
+      xTaskCreate(BleInitTask, "ble_init", 12288, nullptr, 1, nullptr);
+  if (ble_task_ok == pdPASS) {
+    Serial.println("[BOOT] DeskRobo BLE init task started (delayed 10 min)");
+  } else {
+    Serial.println("[BOOT] DeskRobo BLE init task failed (BLE disabled)");
+  }
+
   DeskRoboAudio_Init();
   Serial.println("[BOOT] DeskRobo Audio test ready");
 }
@@ -91,7 +109,10 @@ void loop() {
   DeskRobo_Loop();
   DeskRoboAudio_Loop();
   DeskRoboWeb_Loop();
-  DeskRoboBLE_Loop();
+  if (g_ble_ready) {
+    DeskRoboBLE_Loop();
+  }
   Lvgl_Loop();
   vTaskDelay(pdMS_TO_TICKS(5));
 }
+

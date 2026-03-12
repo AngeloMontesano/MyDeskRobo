@@ -1,4 +1,4 @@
-#include "DeskRoboWeb.h"
+﻿#include "DeskRoboWeb.h"
 
 #include <Arduino.h>
 #include <Preferences.h>
@@ -96,6 +96,7 @@ small{opacity:0.6;font-size:0.8rem;display:block;margin-top:8px}
 <button onclick="evt('SHAKE')">Shake</button><button onclick="evt('QUIET')">Quiet</button>
 </div></div>
 <div class=card><h3>Debug</h3>
+<small style="margin-top:0">Standard: aus</small>
 <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
 <span>Show bottom status label</span>
 <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
@@ -104,23 +105,25 @@ small{opacity:0.6;font-size:0.8rem;display:block;margin-top:8px}
 </label>
 </div>
 </div>
-<div class=card><h3>Idle Tuning (Advanced)</h3>
+<div class=card><h3>Idle Bewegung anpassen</h3>
+<small style="margin-top:0">Hier stellst du ein, wie ruhig oder lebendig die Augen im Leerlauf wirken.</small>
 <div class=grid>
-<input id=t_drift_amp_px type=number placeholder="drift_amp_px">
-<input id=t_saccade_amp_px type=number placeholder="saccade_amp_px">
-<input id=t_saccade_min_ms type=number placeholder="saccade_min_ms">
-<input id=t_saccade_max_ms type=number placeholder="saccade_max_ms">
-<input id=t_blink_interval_ms type=number placeholder="blink_interval_ms">
-<input id=t_blink_duration_ms type=number placeholder="blink_duration_ms">
-<input id=t_double_blink_chance_pct type=number placeholder="double_blink_chance_pct">
-<input id=t_glow_pulse_amp type=number placeholder="glow_pulse_amp">
-<input id=t_glow_pulse_period_ms type=number placeholder="glow_pulse_period_ms">
+<input id=t_drift_amp_px type=number placeholder="Blickdrift Stärke (px)">
+<input id=t_saccade_amp_px type=number placeholder="Sakkaden Sprungweite (px)">
+<input id=t_saccade_min_ms type=number placeholder="Sakkaden min Intervall (ms)">
+<input id=t_saccade_max_ms type=number placeholder="Sakkaden max Intervall (ms)">
+<input id=t_blink_interval_ms type=number placeholder="Blink Intervall (ms)">
+<input id=t_blink_duration_ms type=number placeholder="Blink Dauer (ms)">
+<input id=t_double_blink_chance_pct type=number placeholder="Doppelblink Chance (%)">
+<input id=t_glow_pulse_amp type=number placeholder="Glow Puls Stärke">
+<input id=t_glow_pulse_period_ms type=number placeholder="Glow Puls Periode (ms)">
 </div>
 <div style="margin-top:15px" class=grid>
-<button onclick="applyTune()">Apply Tune</button>
-<button onclick="saveTune()">Save Tune</button>
-<button onclick="loadTune()">Load Tune</button>
+<button onclick="applyTune()">Werte anwenden</button>
+<button onclick="saveTune()">Als Standard speichern</button>
+<button onclick="loadTune()">Gespeicherte Werte laden</button>
 </div>
+<small>Tipps: Kleinere Werte wirken ruhiger, größere Werte lebendiger.</small>
 <div id=tuneState style="margin-top:10px;font-size:0.9rem;color:#4ade80"></div>
 </div>
 <div class=card><h3>OTA Update</h3>
@@ -213,7 +216,7 @@ async function applyTune(){
  for(const k of keys){const el=document.getElementById('t_'+k);if(!el)continue;
    const v=parseInt(el.value,10);if(Number.isNaN(v))continue;
    const r=await fetch('/api/tune/set?key='+k+'&value='+v,{method:'POST'});if(r.ok)ok++;}
- document.getElementById('tuneState').textContent='Applied '+ok+' params successfully';
+ document.getElementById('tuneState').textContent='Erfolgreich angewendet: '+ok+' Werte';
  refresh();
 }
 async function saveTune(){const r=await fetch('/api/tune/save',{method:'POST'});document.getElementById('tuneState').textContent=await r.text();}
@@ -530,9 +533,18 @@ void DeskRoboWeb_Init() {
 
 void DeskRoboWeb_Loop() {
   server.handleClient();
-  if (g_ap_is_on && (millis() - g_ap_start_ms > 300000)) {
+
+  const uint32_t ap_uptime_ms = millis() - g_ap_start_ms;
+  const bool ap_uptime_expired = ap_uptime_ms > (9UL * 60UL * 1000UL);
+  const bool no_ap_clients = (WiFi.softAPgetStationNum() == 0);
+
+  if (g_ap_is_on && ap_uptime_expired && no_ap_clients) {
     g_ap_is_on = false;
     WiFi.softAPdisconnect(true);
-    Serial.println("[WEB] AP auto-disabled after 5 min");
+    Serial.println("[WEB] AP auto-disabled after 9 min (no clients)");
   }
 }
+
+
+
+

@@ -45,7 +45,7 @@ static AnimeFace s_face;
 static lv_obj_t *s_status = nullptr;
 static lv_obj_t *s_motion_debug = nullptr;
 static lv_obj_t *s_time_label = nullptr;
-static bool s_status_label_visible = true;
+static bool s_status_label_visible = false;
 
 static DeskRoboEmotion s_current_emotion = DESKROBO_EMOTION_IDLE;
 static uint8_t s_current_priority = 0;
@@ -652,3 +652,4 @@ void DeskRobo_Loop() {
 
   s_face.update();
 }
+
