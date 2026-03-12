@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import queue
 import threading
 import tkinter as tk
@@ -6,6 +6,56 @@ from datetime import datetime
 from tkinter import ttk
 
 import pc_agent as agent_runtime
+
+
+EMOTIONS = [
+    "IDLE",
+    "HAPPY",
+    "SAD",
+    "ANGRY",
+    "WOW",
+    "SLEEPY",
+    "CONFUSED",
+    "EXCITED",
+    "DIZZY",
+    "MAIL",
+    "CALL",
+    "SHAKE",
+]
+
+EVENTS = ["CALL", "MAIL", "TEAMS", "LOUD", "VERY_LOUD", "TILT", "SHAKE", "QUIET"]
+
+STYLES = ["EVE_SUBTLE", "EVE_CINEMATIC", "EVE_COMIC", "ROUND"]
+
+TUNE_KEYS = [
+    "drift_amp_px",
+    "saccade_amp_px",
+    "saccade_min_ms",
+    "saccade_max_ms",
+    "blink_interval_ms",
+    "blink_duration_ms",
+    "double_blink_chance_pct",
+    "glow_pulse_amp",
+    "glow_pulse_period_ms",
+    "gyro_tilt_xy_pct",
+    "gyro_tilt_z_pct",
+    "gyro_tilt_cooldown_ms",
+]
+
+TUNE_DEFAULTS = {
+    "drift_amp_px": "2",
+    "saccade_amp_px": "5",
+    "saccade_min_ms": "1400",
+    "saccade_max_ms": "3800",
+    "blink_interval_ms": "3600",
+    "blink_duration_ms": "120",
+    "double_blink_chance_pct": "20",
+    "glow_pulse_amp": "6",
+    "glow_pulse_period_ms": "2600",
+    "gyro_tilt_xy_pct": "62",
+    "gyro_tilt_z_pct": "64",
+    "gyro_tilt_cooldown_ms": "2200",
+}
 
 
 class AgentController:
@@ -36,14 +86,14 @@ class AgentController:
         if loop is not None and stop_event is not None:
             loop.call_soon_threadsafe(stop_event.set)
 
-    def send_tune(self, key: str, value: int) -> bool:
+    def send_command(self, *cmd) -> bool:
         with self._lock:
             loop = self._loop
             control_queue = self._control_queue
         if loop is None or control_queue is None:
             return False
         try:
-            loop.call_soon_threadsafe(control_queue.put_nowait, ("tune", key, int(value)))
+            loop.call_soon_threadsafe(control_queue.put_nowait, tuple(cmd))
             return True
         except Exception:
             return False
@@ -87,8 +137,8 @@ class AgentApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("DeskRobo PC Agent")
-        self.root.geometry("620x560")
-        self.root.minsize(580, 500)
+        self.root.geometry("980x760")
+        self.root.minsize(900, 700)
 
         self.event_queue: "queue.Queue[tuple]" = queue.Queue()
         self.controller = AgentController(self.event_queue)
@@ -96,9 +146,18 @@ class AgentApp:
         self.mode_var = tk.StringVar(value="basic")
         self.state_var = tk.StringVar(value="Nicht gestartet")
         self.detail_var = tk.StringVar(value="")
-        self.gyro_xy_var = tk.StringVar(value="62")
-        self.gyro_z_var = tk.StringVar(value="64")
-        self.gyro_cd_var = tk.StringVar(value="2200")
+
+        self.emotion_var = tk.StringVar(value="IDLE")
+        self.emotion_hold_var = tk.StringVar(value="3500")
+        self.style_var = tk.StringVar(value="EVE_CINEMATIC")
+        self.backlight_var = tk.IntVar(value=65)
+        self.status_label_var = tk.BooleanVar(value=False)
+        self.left_eye_var = tk.StringVar(value="IDLE")
+        self.right_eye_var = tk.StringVar(value="IDLE")
+        self.eye_hold_var = tk.StringVar(value="5000")
+        self.raw_cmd_var = tk.StringVar(value="")
+
+        self.tune_vars = {k: tk.StringVar(value=TUNE_DEFAULTS.get(k, "")) for k in TUNE_KEYS}
 
         self._build_ui()
         self._update_buttons()
@@ -106,63 +165,110 @@ class AgentApp:
         self.root.after(200, self._poll_events)
 
     def _build_ui(self) -> None:
-        container = ttk.Frame(self.root, padding=14)
+        container = ttk.Frame(self.root, padding=12)
         container.pack(fill=tk.BOTH, expand=True)
 
         top = ttk.Frame(container)
         top.pack(fill=tk.X)
 
         ttk.Label(top, text="Modus:").pack(side=tk.LEFT)
-        mode_combo = ttk.Combobox(
+        ttk.Combobox(
             top,
             textvariable=self.mode_var,
             values=("basic", "all", "teams", "mic"),
             width=12,
             state="readonly",
-        )
-        mode_combo.pack(side=tk.LEFT, padx=(8, 16))
+        ).pack(side=tk.LEFT, padx=(8, 16))
 
         self.start_btn = ttk.Button(top, text="Start", command=self._on_start)
         self.start_btn.pack(side=tk.LEFT)
-
         self.stop_btn = ttk.Button(top, text="Stop", command=self._on_stop)
         self.stop_btn.pack(side=tk.LEFT, padx=8)
 
-        status = ttk.LabelFrame(container, text="Status", padding=12)
-        status.pack(fill=tk.X, pady=(12, 8))
-
+        status = ttk.LabelFrame(container, text="Status", padding=10)
+        status.pack(fill=tk.X, pady=(10, 10))
         ttk.Label(status, textvariable=self.state_var, font=("Segoe UI", 11, "bold")).pack(anchor="w")
         ttk.Label(status, textvariable=self.detail_var).pack(anchor="w", pady=(4, 0))
 
-        tune = ttk.LabelFrame(container, text="Gyro / Confused Tuning", padding=12)
-        tune.pack(fill=tk.X, pady=(8, 8))
+        notebook = ttk.Notebook(container)
+        notebook.pack(fill=tk.BOTH, expand=True)
 
-        grid = ttk.Frame(tune)
-        grid.pack(fill=tk.X)
+        control_tab = ttk.Frame(notebook, padding=10)
+        tune_tab = ttk.Frame(notebook, padding=10)
+        log_tab = ttk.Frame(notebook, padding=10)
 
-        ttk.Label(grid, text="Tilt XY Schwelle (%)").grid(row=0, column=0, sticky="w")
-        ttk.Entry(grid, textvariable=self.gyro_xy_var, width=10).grid(row=0, column=1, padx=(8, 16), sticky="w")
+        notebook.add(control_tab, text="Steuerung")
+        notebook.add(tune_tab, text="Idle Tuning")
+        notebook.add(log_tab, text="Log")
 
-        ttk.Label(grid, text="Tilt Z Schwelle (%)").grid(row=0, column=2, sticky="w")
-        ttk.Entry(grid, textvariable=self.gyro_z_var, width=10).grid(row=0, column=3, padx=(8, 0), sticky="w")
+        self._build_control_tab(control_tab)
+        self._build_tune_tab(tune_tab)
+        self._build_log_tab(log_tab)
 
-        ttk.Label(grid, text="Cooldown (ms)").grid(row=1, column=0, sticky="w", pady=(8, 0))
-        ttk.Entry(grid, textvariable=self.gyro_cd_var, width=10).grid(row=1, column=1, padx=(8, 16), sticky="w", pady=(8, 0))
+    def _build_control_tab(self, parent: ttk.Frame) -> None:
+        style = ttk.LabelFrame(parent, text="Eye Style", padding=10)
+        style.pack(fill=tk.X, pady=(0, 8))
+        ttk.Combobox(style, textvariable=self.style_var, values=STYLES, state="readonly", width=18).pack(side=tk.LEFT)
+        ttk.Button(style, text="Style anwenden", command=self._on_set_style).pack(side=tk.LEFT, padx=8)
 
-        self.apply_tune_btn = ttk.Button(tune, text="Gyro-Werte anwenden", command=self._on_apply_gyro_tuning)
-        self.apply_tune_btn.pack(anchor="w", pady=(10, 0))
+        emo = ttk.LabelFrame(parent, text="Emotion", padding=10)
+        emo.pack(fill=tk.X, pady=(0, 8))
+        ttk.Combobox(emo, textvariable=self.emotion_var, values=EMOTIONS, state="readonly", width=14).pack(side=tk.LEFT)
+        ttk.Label(emo, text="Hold (ms)").pack(side=tk.LEFT, padx=(10, 4))
+        ttk.Entry(emo, textvariable=self.emotion_hold_var, width=8).pack(side=tk.LEFT)
+        ttk.Button(emo, text="Emotion senden", command=self._on_set_emotion).pack(side=tk.LEFT, padx=8)
 
-        ttk.Label(
-            tune,
-            text="Hinweis: Funktioniert nur, wenn der Agent bereits gestartet und verbunden ist.",
-        ).pack(anchor="w", pady=(6, 0))
+        eyes = ttk.LabelFrame(parent, text="EVE Eyes (Left/Right)", padding=10)
+        eyes.pack(fill=tk.X, pady=(0, 8))
+        ttk.Combobox(eyes, textvariable=self.left_eye_var, values=EMOTIONS, state="readonly", width=12).pack(side=tk.LEFT)
+        ttk.Combobox(eyes, textvariable=self.right_eye_var, values=EMOTIONS, state="readonly", width=12).pack(side=tk.LEFT, padx=(6, 0))
+        ttk.Label(eyes, text="Hold (ms)").pack(side=tk.LEFT, padx=(10, 4))
+        ttk.Entry(eyes, textvariable=self.eye_hold_var, width=8).pack(side=tk.LEFT)
+        ttk.Button(eyes, text="Eye Pair setzen", command=self._on_set_eyes).pack(side=tk.LEFT, padx=8)
 
-        log_frame = ttk.LabelFrame(container, text="Ereignisse", padding=8)
-        log_frame.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
+        backlight = ttk.LabelFrame(parent, text="Backlight", padding=10)
+        backlight.pack(fill=tk.X, pady=(0, 8))
+        ttk.Scale(backlight, from_=0, to=100, variable=self.backlight_var, orient="horizontal").pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Label(backlight, textvariable=self.backlight_var, width=4).pack(side=tk.LEFT, padx=(8, 8))
+        ttk.Button(backlight, text="Helligkeit setzen", command=self._on_set_backlight).pack(side=tk.LEFT)
 
-        self.log_text = tk.Text(log_frame, height=12, wrap="word", state="disabled")
+        debug = ttk.LabelFrame(parent, text="Debug", padding=10)
+        debug.pack(fill=tk.X, pady=(0, 8))
+        ttk.Checkbutton(debug, text="Show bottom status label", variable=self.status_label_var).pack(side=tk.LEFT)
+        ttk.Button(debug, text="Debug anwenden", command=self._on_set_status_label).pack(side=tk.LEFT, padx=8)
+
+        events = ttk.LabelFrame(parent, text="Events Simulator", padding=10)
+        events.pack(fill=tk.X, pady=(0, 8))
+        for i, ev in enumerate(EVENTS):
+            ttk.Button(events, text=ev, command=lambda n=ev: self._send_event(n)).grid(row=i // 4, column=i % 4, padx=4, pady=4, sticky="ew")
+        for col in range(4):
+            events.grid_columnconfigure(col, weight=1)
+
+        misc = ttk.LabelFrame(parent, text="BLE Extras", padding=10)
+        misc.pack(fill=tk.X)
+        ttk.Button(misc, text="Zeit jetzt syncen", command=self._on_time_sync).pack(side=tk.LEFT)
+        ttk.Entry(misc, textvariable=self.raw_cmd_var, width=36).pack(side=tk.LEFT, padx=(10, 6))
+        ttk.Button(misc, text="Raw CMD senden", command=self._on_raw_cmd).pack(side=tk.LEFT)
+
+    def _build_tune_tab(self, parent: ttk.Frame) -> None:
+        frame = ttk.LabelFrame(parent, text="Idle Bewegung anpassen", padding=10)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        for i, key in enumerate(TUNE_KEYS):
+            r = i // 2
+            c = (i % 2) * 2
+            ttk.Label(frame, text=key).grid(row=r, column=c, sticky="w", padx=(0, 8), pady=4)
+            ttk.Entry(frame, textvariable=self.tune_vars[key], width=16).grid(row=r, column=c + 1, sticky="w", pady=4)
+
+        btns = ttk.Frame(frame)
+        btns.grid(row=7, column=0, columnspan=4, sticky="w", pady=(12, 0))
+        ttk.Button(btns, text="Werte anwenden", command=self._on_apply_tune).pack(side=tk.LEFT)
+        ttk.Button(btns, text="Als Standard speichern", command=self._on_save_tune).pack(side=tk.LEFT, padx=8)
+        ttk.Button(btns, text="Gespeicherte Werte laden", command=self._on_load_tune).pack(side=tk.LEFT)
+
+    def _build_log_tab(self, parent: ttk.Frame) -> None:
+        self.log_text = tk.Text(parent, wrap="word", state="disabled")
         self.log_text.pack(fill=tk.BOTH, expand=True)
-
         self._append_log("GUI bereit. Mit Start wird der Agent im Hintergrund gestartet.")
 
     def _append_log(self, line: str) -> None:
@@ -191,6 +297,15 @@ class AgentApp:
         }
         return mapping.get(state, state), message
 
+    def _send(self, *cmd) -> bool:
+        if not self.controller.is_running():
+            self._append_log("Befehl nicht gesendet: Agent ist nicht gestartet.")
+            return False
+        ok = self.controller.send_command(*cmd)
+        if not ok:
+            self._append_log("Befehl konnte nicht in die Queue gelegt werden.")
+        return ok
+
     def _on_start(self) -> None:
         mode = self.mode_var.get().strip() or "basic"
         if self.controller.start(mode):
@@ -206,40 +321,84 @@ class AgentApp:
         self._append_log("Stop angefordert.")
         self._update_buttons()
 
-    def _on_apply_gyro_tuning(self) -> None:
-        if not self.controller.is_running():
-            self._append_log("Gyro-Tuning nicht gesendet: Agent ist nicht gestartet.")
-            return
+    def _on_set_style(self) -> None:
+        if self._send("style", self.style_var.get()):
+            self._append_log(f"Style gesendet: {self.style_var.get()}")
 
+    def _on_set_emotion(self) -> None:
         try:
-            xy = int(self.gyro_xy_var.get().strip())
-            z = int(self.gyro_z_var.get().strip())
-            cooldown = int(self.gyro_cd_var.get().strip())
+            hold = int(self.emotion_hold_var.get().strip())
         except ValueError:
-            self._append_log("Ungueltige Gyro-Werte: Bitte nur ganze Zahlen eingeben.")
+            self._append_log("Hold muss eine ganze Zahl sein.")
             return
+        emo = self.emotion_var.get()
+        if self._send("emotion", emo, hold):
+            self._append_log(f"Emotion gesendet: {emo} ({hold}ms)")
 
-        payloads = [
-            ("gyro_tilt_xy_pct", xy),
-            ("gyro_tilt_z_pct", z),
-            ("gyro_tilt_cooldown_ms", cooldown),
-        ]
+    def _on_set_eyes(self) -> None:
+        try:
+            hold = int(self.eye_hold_var.get().strip())
+        except ValueError:
+            self._append_log("Eye-Hold muss eine ganze Zahl sein.")
+            return
+        left = self.left_eye_var.get()
+        right = self.right_eye_var.get()
+        if self._send("eyes", left, right, hold):
+            self._append_log(f"Eye Pair gesendet: {left}/{right} ({hold}ms)")
 
+    def _on_set_backlight(self) -> None:
+        value = int(self.backlight_var.get())
+        if self._send("backlight", value):
+            self._append_log(f"Backlight gesendet: {value}%")
+
+    def _on_set_status_label(self) -> None:
+        val = bool(self.status_label_var.get())
+        if self._send("status_label", val):
+            self._append_log(f"Status-Label gesetzt: {'ON' if val else 'OFF'}")
+
+    def _send_event(self, name: str) -> None:
+        if self._send("event", name):
+            self._append_log(f"Event gesendet: {name}")
+
+    def _on_time_sync(self) -> None:
+        if self._send("time_sync"):
+            self._append_log("Zeit-Sync gesendet.")
+
+    def _on_raw_cmd(self) -> None:
+        payload = self.raw_cmd_var.get().strip()
+        if not payload:
+            self._append_log("Raw CMD ist leer.")
+            return
+        if self._send("cmd", payload):
+            self._append_log(f"Raw CMD gesendet: {payload}")
+
+    def _on_apply_tune(self) -> None:
         sent = 0
-        for key, value in payloads:
-            if self.controller.send_tune(key, value):
+        for key in TUNE_KEYS:
+            raw = self.tune_vars[key].get().strip()
+            if not raw:
+                continue
+            try:
+                val = int(raw)
+            except ValueError:
+                self._append_log(f"Ungueltiger Wert fuer {key}: {raw}")
+                continue
+            if self._send("tune", key, val):
                 sent += 1
+        self._append_log(f"Tuning gesendet: {sent} Werte")
 
-        if sent == len(payloads):
-            self._append_log(f"Gyro-Tuning gesendet: XY={xy}, Z={z}, Cooldown={cooldown}ms")
-        else:
-            self._append_log("Gyro-Tuning nur teilweise gesendet. Bitte Verbindung pruefen.")
+    def _on_save_tune(self) -> None:
+        if self._send("tune_save"):
+            self._append_log("Tuning auf Device gespeichert.")
+
+    def _on_load_tune(self) -> None:
+        if self._send("tune_load"):
+            self._append_log("Tuning vom Device geladen (aktive Werte wurden umgeschaltet).")
 
     def _update_buttons(self) -> None:
         running = self.controller.is_running()
         self.start_btn.configure(state=("disabled" if running else "normal"))
         self.stop_btn.configure(state=("normal" if running else "disabled"))
-        self.apply_tune_btn.configure(state=("normal" if running else "disabled"))
 
     def _poll_events(self) -> None:
         while True:
@@ -251,10 +410,7 @@ class AgentApp:
             if kind == "status":
                 title, detail = self._friendly_status(state, message)
                 self._set_state(title, detail)
-                if message:
-                    self._append_log(f"{title}: {message}")
-                else:
-                    self._append_log(title)
+                self._append_log(f"{title}: {message}" if message else title)
             elif kind == "error":
                 self._set_state("Fehler", message)
                 self._append_log(f"Fehler: {message}")
@@ -274,7 +430,7 @@ class AgentApp:
 def main() -> None:
     root = tk.Tk()
     ttk.Style().theme_use("vista")
-    app = AgentApp(root)
+    AgentApp(root)
     root.mainloop()
 
 

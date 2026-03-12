@@ -299,6 +299,12 @@ class BleClient:
         right = str(right_name).strip().upper()
         return await self.send_command_payload(f"EYES:{left}:{right}:{h}")
 
+    async def save_tuning(self) -> bool:
+        return await self.send_command_payload("TUNE_SAVE:1")
+
+    async def load_tuning(self) -> bool:
+        return await self.send_command_payload("TUNE_LOAD:1")
+
     async def send_emotion(self, emotion: int) -> bool:
         emotion = int(emotion) & 0xFF
 

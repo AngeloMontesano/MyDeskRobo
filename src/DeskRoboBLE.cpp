@@ -34,6 +34,8 @@ enum CmdType : uint8_t {
   CMD_SET_STATUS_LABEL = 6,
   CMD_SET_BACKLIGHT = 7,
   CMD_SET_TUNING = 8,
+  CMD_SAVE_TUNING = 9,
+  CMD_LOAD_TUNING = 10,
 };
 
 struct BleCmd {
@@ -121,6 +123,9 @@ enum TuneKeyId : uint8_t {
   TUNE_KEY_DBL_BLINK_PCT = 7,
   TUNE_KEY_GLOW_AMP = 8,
   TUNE_KEY_GLOW_PERIOD = 9,
+  TUNE_KEY_GYRO_TILT_XY = 10,
+  TUNE_KEY_GYRO_TILT_Z = 11,
+  TUNE_KEY_GYRO_TILT_COOLDOWN = 12,
 };
 
 bool parseBoolToken(const String &in, bool &out) {
@@ -165,6 +170,9 @@ bool parseTuneKeyId(const String &name, uint8_t &out) {
   else if (name == "DOUBLE_BLINK_CHANCE_PCT") out = TUNE_KEY_DBL_BLINK_PCT;
   else if (name == "GLOW_PULSE_AMP") out = TUNE_KEY_GLOW_AMP;
   else if (name == "GLOW_PULSE_PERIOD_MS") out = TUNE_KEY_GLOW_PERIOD;
+  else if (name == "GYRO_TILT_XY_PCT") out = TUNE_KEY_GYRO_TILT_XY;
+  else if (name == "GYRO_TILT_Z_PCT") out = TUNE_KEY_GYRO_TILT_Z;
+  else if (name == "GYRO_TILT_COOLDOWN_MS") out = TUNE_KEY_GYRO_TILT_COOLDOWN;
   else return false;
   return true;
 }
@@ -189,6 +197,12 @@ const char *tuneKeyName(uint8_t key_id) {
       return "glow_pulse_amp";
     case TUNE_KEY_GLOW_PERIOD:
       return "glow_pulse_period_ms";
+    case TUNE_KEY_GYRO_TILT_XY:
+      return "gyro_tilt_xy_pct";
+    case TUNE_KEY_GYRO_TILT_Z:
+      return "gyro_tilt_z_pct";
+    case TUNE_KEY_GYRO_TILT_COOLDOWN:
+      return "gyro_tilt_cooldown_ms";
     default:
       return nullptr;
   }
@@ -357,6 +371,10 @@ void handleTextCommand(String cmd) {
           ok = enqueueCmd({CMD_SET_TUNING, key_id, 0, value});
         }
       }
+    } else if (action == "TUNE_SAVE") {
+      ok = enqueueCmd({CMD_SAVE_TUNING, 0, 0, 0});
+    } else if (action == "TUNE_LOAD") {
+      ok = enqueueCmd({CMD_LOAD_TUNING, 0, 0, 0});
     } else if (action == "EVENT") {
       DeskRoboEventType ev;
       if (parseEvent(payload, ev)) {
@@ -541,6 +559,12 @@ void DeskRoboBLE_Loop() {
         }
         break;
       }
+      case CMD_SAVE_TUNING:
+        (void)DeskRobo_SaveTuning();
+        break;
+      case CMD_LOAD_TUNING:
+        (void)DeskRobo_LoadTuning();
+        break;
       default:
         break;
     }
