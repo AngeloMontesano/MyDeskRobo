@@ -1,4 +1,4 @@
-﻿#include "DeskRoboWeb.h"
+#include "DeskRoboWeb.h"
 
 #include <Arduino.h>
 #include <Preferences.h>
@@ -18,6 +18,7 @@ WebServer server(80);
 Preferences g_web_prefs;
 bool g_ap_is_on = false;
 uint32_t g_ap_start_ms = 0;
+bool g_wifi_disabled = false;
 
 const char *kApSsid = "DeskRobo-Setup";
 
@@ -108,14 +109,14 @@ small{opacity:0.6;font-size:0.8rem;display:block;margin-top:8px}
 <div class=card><h3>Idle Bewegung anpassen</h3>
 <small style="margin-top:0">Hier stellst du ein, wie ruhig oder lebendig die Augen im Leerlauf wirken.</small>
 <div class=grid>
-<input id=t_drift_amp_px type=number placeholder="Blickdrift Stärke (px)">
+<input id=t_drift_amp_px type=number placeholder="Blickdrift StÃƒÂ¤rke (px)">
 <input id=t_saccade_amp_px type=number placeholder="Sakkaden Sprungweite (px)">
 <input id=t_saccade_min_ms type=number placeholder="Sakkaden min Intervall (ms)">
 <input id=t_saccade_max_ms type=number placeholder="Sakkaden max Intervall (ms)">
 <input id=t_blink_interval_ms type=number placeholder="Blink Intervall (ms)">
 <input id=t_blink_duration_ms type=number placeholder="Blink Dauer (ms)">
 <input id=t_double_blink_chance_pct type=number placeholder="Doppelblink Chance (%)">
-<input id=t_glow_pulse_amp type=number placeholder="Glow Puls Stärke">
+<input id=t_glow_pulse_amp type=number placeholder="Glow Puls StÃƒÂ¤rke">
 <input id=t_glow_pulse_period_ms type=number placeholder="Glow Puls Periode (ms)">
 </div>
 <div style="margin-top:15px" class=grid>
@@ -123,7 +124,7 @@ small{opacity:0.6;font-size:0.8rem;display:block;margin-top:8px}
 <button onclick="saveTune()">Als Standard speichern</button>
 <button onclick="loadTune()">Gespeicherte Werte laden</button>
 </div>
-<small>Tipps: Kleinere Werte wirken ruhiger, größere Werte lebendiger.</small>
+<small>Tipps: Kleinere Werte wirken ruhiger, grÃƒÂ¶ÃƒÅ¸ere Werte lebendiger.</small>
 <div id=tuneState style="margin-top:10px;font-size:0.9rem;color:#4ade80"></div>
 </div>
 <div class=card><h3>OTA Update</h3>
@@ -506,6 +507,8 @@ void handleRoutes() {
 } // namespace
 
 void DeskRoboWeb_Init() {
+  g_wifi_disabled = false;
+
   g_web_prefs.begin("deskrobo", true);
   String ssid = g_web_prefs.getString("wifi_ssid", "");
   String pass = g_web_prefs.getString("wifi_pass", "");
@@ -516,7 +519,7 @@ void DeskRoboWeb_Init() {
   WiFi.softAP(kApSsid);
   g_ap_is_on = true;
   g_ap_start_ms = millis();
-  
+
   Serial.printf("[WEB] AP started: %s IP=%s\n", kApSsid,
                 WiFi.softAPIP().toString().c_str());
 
@@ -531,7 +534,27 @@ void DeskRoboWeb_Init() {
   Serial.println("[WEB] HTTP server started");
 }
 
+void DeskRoboWeb_ShutdownWiFi() {
+  if (g_wifi_disabled) {
+    return;
+  }
+
+  if (g_ap_is_on) {
+    g_ap_is_on = false;
+    WiFi.softAPdisconnect(true);
+  }
+
+  WiFi.disconnect(true, true);
+  WiFi.mode(WIFI_OFF);
+  g_wifi_disabled = true;
+  Serial.println("[WEB] WiFi disabled (AP+STA off)");
+}
+
 void DeskRoboWeb_Loop() {
+  if (g_wifi_disabled) {
+    return;
+  }
+
   server.handleClient();
 
   const uint32_t ap_uptime_ms = millis() - g_ap_start_ms;
@@ -544,7 +567,3 @@ void DeskRoboWeb_Loop() {
     Serial.println("[WEB] AP auto-disabled after 9 min (no clients)");
   }
 }
-
-
-
-

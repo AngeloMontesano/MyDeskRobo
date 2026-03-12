@@ -1,4 +1,5 @@
-﻿#include <Arduino.h>
+#include <Arduino.h>
+#include <WiFi.h>
 
 #include "LVGL_Arduino/BAT_Driver.h"
 #include "LVGL_Arduino/Display_ST77916.h"
@@ -21,14 +22,58 @@
 #endif
 
 static volatile bool g_ble_ready = false;
+static volatile bool g_ble_init_requested = false;
+static bool g_boot_wifi_policy_done = false;
+static uint32_t g_boot_ms = 0;
+
+static constexpr uint32_t kBootWifiGraceMs = 60UL * 1000UL;
 
 static void BleInitTask(void *param) {
   (void)param;
-  vTaskDelay(pdMS_TO_TICKS(10UL * 60UL * 1000UL));
   DeskRoboBLE_Init();
   g_ble_ready = true;
   Serial.println("[BOOT] DeskRobo BLE ready");
   vTaskDelete(nullptr);
+}
+
+static void RequestBleInit(const char *reason) {
+  if (g_ble_ready || g_ble_init_requested) {
+    return;
+  }
+
+  g_ble_init_requested = true;
+  const BaseType_t ble_task_ok =
+      xTaskCreate(BleInitTask, "ble_init", 12288, nullptr, 1, nullptr);
+  if (ble_task_ok == pdPASS) {
+    Serial.printf("[BOOT] DeskRobo BLE init task started (%s)\n",
+                  reason ? reason : "no-reason");
+  } else {
+    g_ble_init_requested = false;
+    Serial.println("[BOOT] DeskRobo BLE init task failed (BLE disabled)");
+  }
+}
+
+static void ApplyBootConnectivityPolicy() {
+  if (g_boot_wifi_policy_done || g_ble_ready || g_ble_init_requested) {
+    return;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    g_boot_wifi_policy_done = true;
+    Serial.println("[BOOT] WLAN connected within 60s -> BLE start");
+    RequestBleInit("wlan-connected");
+    return;
+  }
+
+  const uint32_t elapsed_ms = millis() - g_boot_ms;
+  if (elapsed_ms < kBootWifiGraceMs) {
+    return;
+  }
+
+  g_boot_wifi_policy_done = true;
+  Serial.println("[BOOT] WLAN timeout after 60s -> WiFi off + BLE start");
+  DeskRoboWeb_ShutdownWiFi();
+  RequestBleInit("wlan-timeout");
 }
 
 static void Gyro_SafeProbe() {
@@ -93,13 +138,8 @@ void setup() {
   DeskRoboWeb_Init();
   Serial.println("[BOOT] DeskRobo Web ready");
 
-  const BaseType_t ble_task_ok =
-      xTaskCreate(BleInitTask, "ble_init", 12288, nullptr, 1, nullptr);
-  if (ble_task_ok == pdPASS) {
-    Serial.println("[BOOT] DeskRobo BLE init task started (delayed 10 min)");
-  } else {
-    Serial.println("[BOOT] DeskRobo BLE init task failed (BLE disabled)");
-  }
+  g_boot_ms = millis();
+  Serial.println("[BOOT] Waiting up to 60s for WLAN before BLE fallback");
 
   DeskRoboAudio_Init();
   Serial.println("[BOOT] DeskRobo Audio test ready");
@@ -109,10 +149,10 @@ void loop() {
   DeskRobo_Loop();
   DeskRoboAudio_Loop();
   DeskRoboWeb_Loop();
+  ApplyBootConnectivityPolicy();
   if (g_ble_ready) {
     DeskRoboBLE_Loop();
   }
   Lvgl_Loop();
   vTaskDelay(pdMS_TO_TICKS(5));
 }
-
