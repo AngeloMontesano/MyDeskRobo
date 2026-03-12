@@ -49,15 +49,15 @@
 #endif
 
 #ifndef DESKROBO_IDLE_ROUND_ROBIN_AFTER_MS
-#define DESKROBO_IDLE_ROUND_ROBIN_AFTER_MS (4UL * 60UL * 1000UL)
+#define DESKROBO_IDLE_ROUND_ROBIN_AFTER_MS (60UL * 1000UL)
 #endif
 
 #ifndef DESKROBO_IDLE_ROUND_ROBIN_INTERVAL_MS
-#define DESKROBO_IDLE_ROUND_ROBIN_INTERVAL_MS (18UL * 1000UL)
+#define DESKROBO_IDLE_ROUND_ROBIN_INTERVAL_MS (45UL * 1000UL)
 #endif
 
 #ifndef DESKROBO_IDLE_ROUND_ROBIN_SHOW_MS
-#define DESKROBO_IDLE_ROUND_ROBIN_SHOW_MS (15000UL)
+#define DESKROBO_IDLE_ROUND_ROBIN_SHOW_MS (6000UL)
 #endif
 
 #ifndef DESKROBO_IDLE_ROUND_ROBIN_PRIORITY
@@ -745,35 +745,14 @@ void DeskRobo_Loop() {
   }
 
   if ((s_current_priority > 0) && (now > s_emotion_expiry_ms)) {
-    if (!s_eye_pair_active && !s_ble_sleep_face_active &&
-        (s_current_priority == DESKROBO_IDLE_ROUND_ROBIN_PRIORITY) &&
-        (s_face_style != DESKROBO_STYLE_ROUND) &&
-        ((now - s_last_interaction_ms) >= DESKROBO_IDLE_ROUND_ROBIN_AFTER_MS)) {
-      static const DeskRoboEmotion kIdleRound[] = {
-          DESKROBO_EMOTION_IDLE,
-          DESKROBO_EMOTION_HAPPY,
-          DESKROBO_EMOTION_EXCITED,
-          DESKROBO_EMOTION_SAD,
-          DESKROBO_EMOTION_WOW,
-      };
-      const size_t idx =
-          (size_t)(s_idle_round_index % (sizeof(kIdleRound) / sizeof(kIdleRound[0])));
-      s_idle_round_index = (uint8_t)(s_idle_round_index + 1U);
-      s_last_idle_round_ms = now;
-      s_current_emotion = kIdleRound[idx];
-      s_current_priority = DESKROBO_IDLE_ROUND_ROBIN_PRIORITY;
-      s_emotion_expiry_ms = now + DESKROBO_IDLE_ROUND_ROBIN_SHOW_MS;
-      apply_emotion_style();
-    } else {
-      s_eye_pair_active = false;
-      s_current_emotion = DESKROBO_EMOTION_IDLE;
-      s_current_priority = 0;
-      s_emotion_expiry_ms = 0;
-      apply_emotion_style();
-    }
+    s_eye_pair_active = false;
+    s_current_emotion = DESKROBO_EMOTION_IDLE;
+    s_current_priority = 0;
+    s_emotion_expiry_ms = 0;
+    apply_emotion_style();
   }
 
-  // EVE idle mood cycle: calm and seamless.
+  // EVE idle mood cycle: occasional mood pulse, then back to IDLE.
   if (!s_eye_pair_active && !s_ble_sleep_face_active &&
       (s_current_priority == 0) && (s_face_style != DESKROBO_STYLE_ROUND) &&
       ((now - s_last_interaction_ms) >= DESKROBO_IDLE_ROUND_ROBIN_AFTER_MS) &&
@@ -781,9 +760,12 @@ void DeskRobo_Loop() {
     static const DeskRoboEmotion kIdleRound[] = {
         DESKROBO_EMOTION_IDLE,
         DESKROBO_EMOTION_HAPPY,
-        DESKROBO_EMOTION_EXCITED,
-        DESKROBO_EMOTION_SAD,
+        DESKROBO_EMOTION_IDLE,
         DESKROBO_EMOTION_WOW,
+        DESKROBO_EMOTION_IDLE,
+        DESKROBO_EMOTION_EXCITED,
+        DESKROBO_EMOTION_IDLE,
+        DESKROBO_EMOTION_HAPPY,
     };
     const size_t idx =
         (size_t)(s_idle_round_index % (sizeof(kIdleRound) / sizeof(kIdleRound[0])));
