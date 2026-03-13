@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeskRobo Eyes Preview – 360×360 LVGL</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a0c12;
+    color: #cceeff;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 12px;
+    gap: 20px;
+  }
+  h1 { font-size: 1.3rem; letter-spacing: 2px; color: #0fdaff; text-transform: uppercase; }
+  .subtitle { font-size: 0.78rem; color: #4a8a9a; letter-spacing: 1px; }
+
+  .main-layout {
+    display: flex;
+    gap: 28px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  /* --- Round LCD bezel --- */
+  .lcd-bezel {
+    width: 380px; height: 380px;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 30% 25%, #1a2030 0%, #080a10 70%);
+    box-shadow:
+      0 0 0 6px #111520,
+      0 0 0 10px #1c2233,
+      0 0 40px 6px rgba(15,218,255,0.12),
+      inset 0 2px 8px rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .lcd-bezel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.04) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 10;
+  }
+  canvas#eyeCanvas {
+    border-radius: 50%;
+    display: block;
+  }
+
+  /* --- Emotion grid --- */
+  .emotion-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 260px;
+  }
+  .emotion-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .em-btn {
+    background: #0d1520;
+    border: 1.5px solid #1a3040;
+    border-radius: 10px;
+    color: #7ad8f0;
+    cursor: pointer;
+    padding: 10px 8px;
+    font-size: 0.8rem;
+    letter-spacing: 0.5px;
+    text-align: center;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .em-btn:hover { background: #132030; border-color: #0fdaff55; color: #cff; }
+  .em-btn.active {
+    background: #0a2535;
+    border-color: #0fdaff;
+    color: #0fdaff;
+    box-shadow: 0 0 10px rgba(15,218,255,0.3);
+    font-weight: bold;
+  }
+  .em-btn .icon { font-size: 1.3rem; display: block; margin-bottom: 3px; }
+
+  /* --- Style selector --- */
+  .style-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .style-btn {
+    background: #0d1520;
+    border: 1.5px solid #1a3040;
+    border-radius: 6px;
+    color: #5a9ab0;
+    cursor: pointer;
+    padding: 5px 10px;
+    font-size: 0.72rem;
+    transition: all 0.15s;
+  }
+  .style-btn:hover { border-color: #0fdaff44; color: #9de; }
+  .style-btn.active { border-color: #0fdaff; color: #0fdaff; background: #0a2535; }
+
+  /* --- Info bar --- */
+  .info-bar {
+    font-size: 0.72rem;
+    color: #3a7080;
+    letter-spacing: 1px;
+    text-align: center;
+  }
+  .info-bar span { color: #0fdaff88; }
+
+  /* --- Auto-cycle toggle --- */
+  .controls-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-top: 4px;
+  }
+  .toggle-btn {
+    background: #0d1520;
+    border: 1.5px solid #1a3040;
+    border-radius: 8px;
+    color: #5a9ab0;
+    cursor: pointer;
+    padding: 6px 16px;
+    font-size: 0.78rem;
+    transition: all 0.15s;
+  }
+  .toggle-btn:hover { border-color: #0fdaff55; color: #9de; }
+  .toggle-btn.on { border-color: #0fdaff; color: #0fdaff; background: #0a2535; }
+
+  .section-label {
+    font-size: 0.68rem;
+    color: #3a6070;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+</style>
+</head>
+<body>
+
+<h1>DeskRobo – Robot Eyes</h1>
+<p class="subtitle">360 × 360 px · LVGL Preview · EVE Cinematic Style</p>
+
+<div class="main-layout">
+
+  <!-- LCD Display -->
+  <div class="lcd-bezel">
+    <canvas id="eyeCanvas" width="360" height="360"></canvas>
+  </div>
+
+  <!-- Control Panel -->
+  <div class="emotion-panel">
+
+    <div>
+      <div class="section-label">Emotion</div>
+      <div class="emotion-grid" id="emotionGrid"></div>
+    </div>
+
+    <div>
+      <div class="section-label">Eye Style</div>
+      <div class="style-row" id="styleRow"></div>
+    </div>
+
+    <div class="controls-row">
+      <button class="toggle-btn" id="cycleBtn">Auto-Cycle: OFF</button>
+      <button class="toggle-btn" id="pairBtn">Pair-Mode: OFF</button>
+    </div>
+
+    <div class="info-bar">
+      FPS: <span id="fpsDisplay">--</span> &nbsp;|&nbsp;
+      Emotion: <span id="emotionLabel">IDLE</span><br>
+      Blink: <span id="blinkStatus">–</span> &nbsp;|&nbsp;
+      Saccade: <span id="saccadeStatus">0,0</span>
+    </div>
+
+    <!-- Pair mode row -->
+    <div id="pairRow" style="display:none">
+      <div class="section-label">Left Eye</div>
+      <div class="emotion-grid" id="pairLeftGrid" style="margin-bottom:8px"></div>
+      <div class="section-label">Right Eye</div>
+      <div class="emotion-grid" id="pairRightGrid"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  DeskRobo Eye Renderer – LVGL-accurate Canvas Preview
+//  360×360 · All emotions & styles
+// ============================================================
+
+const EMOTIONS = [
+  { id: 'IDLE',     icon: '😐', label: 'Idle'     },
+  { id: 'HAPPY',    icon: '😄', label: 'Happy'    },
+  { id: 'SAD',      icon: '😢', label: 'Sad'      },
+  { id: 'ANGRY',    icon: '😠', label: 'Angry'    },
+  { id: 'WOW',      icon: '😮', label: 'Wow'      },
+  { id: 'SLEEPY',   icon: '😴', label: 'Sleepy'   },
+  { id: 'CONFUSED', icon: '😕', label: 'Confused' },
+  { id: 'EXCITED',  icon: '🤩', label: 'Excited'  },
+  { id: 'DIZZY',    icon: '😵', label: 'Dizzy'    },
+  { id: 'SHAKE',    icon: '😱', label: 'Shake'    },
+];
+
+const STYLES = ['EVE', 'EVE_SUBTLE', 'EVE_COMIC', 'ROUND', 'AI'];
+
+const BG_COLOR    = '#06080D';
+const EYE_COLOR   = '#0FDAFF';
+const EYE_SUBTLE  = '#0CC8EF';
+const EYE_COMIC   = '#2AEAFF';
+const EYE_AI      = '#66F0FF';
+const EYE_ROUND   = '#0FDAFF';
+
+const CX = 180, CY = 180;
+const EYE_GAP = 68;
+
+let currentEmotion = 'IDLE';
+let currentStyle   = 'EVE';
+let autoCycle      = false;
+let pairMode       = false;
+let pairLeft       = 'IDLE';
+let pairRight      = 'IDLE';
+let autoCycleIdx   = 0;
+
+// Animation state (mirrors C++ Tuning struct)
+const T = {
+  drift_amp_px: 2,
+  saccade_amp_px: 4,
+  saccade_min_ms: 900,
+  saccade_max_ms: 2200,
+  blink_interval_ms: 3900,
+  blink_duration_ms: 120,
+  double_blink_chance_pct: 24,
+  glow_pulse_amp: 20,
+  glow_pulse_period_ms: 1800,
+  shake_amp_px: 24,
+  shake_period_ms: 700,
+};
+
+let blinkUntilMs  = 0;
+let nextBlinkMs   = 0;
+let nextSaccadeMs = 0;
+let driftDx = 0, driftDy = 0;
+let saccadeDx = 0, saccadeDy = 0;
+let pulseShift = 0;
+let lastDriftUpdate = 0;
+let autoCycleTimer = 0;
+
+let fps = 0, fpsLast = 0, fpsCount = 0;
+
+const canvas = document.getElementById('eyeCanvas');
+const ctx    = canvas.getContext('2d');
+
+// ---- Math helpers ----
+function rnd(a, b)  { return Math.random() * (b - a) + a; }
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return {r,g,b};
+}
+function colorWithAlpha(hex, alpha) {
+  const c = hexToRgb(hex);
+  return `rgba(${c.r},${c.g},${c.b},${alpha.toFixed(3)})`;
+}
+
+// ---- Rounded-rect helper (simulates LVGL rounded pill/ellipse) ----
+function roundedRect(ctx, x, y, w, h, r, fill, fillAlpha) {
+  if (w < 2 || h < 2) return;
+  const rx = Math.min(r === 'circle' ? Math.min(w,h)/2 : r, w/2, h/2);
+  ctx.beginPath();
+  ctx.moveTo(x + rx, y);
+  ctx.lineTo(x + w - rx, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + rx);
+  ctx.lineTo(x + w, y + h - rx);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - rx, y + h);
+  ctx.lineTo(x + rx, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - rx);
+  ctx.lineTo(x, y + rx);
+  ctx.quadraticCurveTo(x, y, x + rx, y);
+  ctx.closePath();
+  if (fill) {
+    ctx.fillStyle = typeof fillAlpha !== 'undefined'
+      ? colorWithAlpha(fill, fillAlpha)
+      : fill;
+    ctx.fill();
+  }
+}
+
+// ---- Draw Background ----
+function drawBg() {
+  ctx.fillStyle = BG_COLOR;
+  ctx.fillRect(0, 0, 360, 360);
+}
+
+// ---- Carve (overlay BG rectangle with optional rotation) ----
+function carve(cx, cy, w, h, dx, dy, angle) {
+  ctx.save();
+  ctx.translate(cx + dx, cy + dy);
+  if (angle) ctx.rotate(angle * Math.PI / 1800); // LVGL uses tenths of degrees
+  ctx.fillStyle = BG_COLOR;
+  ctx.fillRect(-w/2, -h/2, w, h);
+  ctx.restore();
+}
+
+// ====================================================
+//  EVE / SUBTLE / COMIC Eye Renderer
+// ====================================================
+function drawEyeEVE(cx, cy, emotion, isRight, blink, style, pulse) {
+  const subtle = style === 'EVE_SUBTLE';
+  const comic  = style === 'EVE_COMIC';
+
+  let w = subtle ? 56 : (comic ? 66 : 60);
+  let h = subtle ? 104: (comic ? 120: 114);
+  const color = subtle ? EYE_SUBTLE : (comic ? EYE_COMIC : EYE_COLOR);
+  let carve_top = false, carve_h = 0, carve_dx = 0, carve_angle = 0;
+  let inner_clip = false, clip_w = 0;
+  let carve_bottom = false, carve_bottom_h = 0;
+  let add_side_shadow = true;
+  let specialMail = false, specialCall = false;
+  const now = performance.now();
+
+  if (blink && emotion !== 'WOW') h = 8;
+
+  switch (emotion) {
+    case 'HAPPY':
+      h = blink ? h : (subtle?80:comic?92:84); w = subtle?54:comic?70:w;
+      carve_bottom = !blink; carve_bottom_h = subtle?30:comic?44:35; cy += subtle?12:comic?18:15;
+      break;
+    case 'SAD':
+      h = blink ? h : (subtle?82:comic?96:84); w = subtle?58:comic?66:62; cy += subtle?11:comic?14:12;
+      carve_top = !blink; carve_h = subtle?14:comic?24:20;
+      carve_dx = isRight ? (subtle?12:comic?18:16) : -(subtle?12:comic?18:16);
+      carve_angle = isRight ? (subtle?-120:comic?-190:-170) : (subtle?120:comic?190:170);
+      carve_bottom = !blink; carve_bottom_h = subtle?10:comic?14:12; add_side_shadow = false;
+      break;
+    case 'ANGRY':
+      h = blink ? h : (subtle?80:comic?92:82); w = subtle?58:comic?68:64; cy += subtle?4:comic?6:6;
+      carve_top = !blink; carve_h = subtle?16:comic?28:22;
+      carve_dx = isRight ? -(subtle?12:comic?20:18) : (subtle?12:comic?20:18);
+      carve_angle = isRight ? (subtle?230:comic?390:340) : -(subtle?230:comic?390:340);
+      carve_bottom = !blink; carve_bottom_h = subtle?6:comic?12:10;
+      break;
+    case 'WOW':
+      w = subtle?62:comic?74:66; h = subtle?108:comic?124:114;
+      break;
+    case 'SLEEPY':
+      h = blink ? h : (subtle?14:comic?18:16); w = subtle?52:comic?60:56;
+      cy += 35; add_side_shadow = false;
+      break;
+    case 'DIZZY':
+      h = blink ? h : (subtle?44:comic?58:50); w = subtle?46:comic?56:50;
+      if (!blink) {
+        inner_clip = true; clip_w = subtle?36:comic?46:40;
+        cx += isRight ? -10 : 10;
+        cy += (Math.floor(now/50) % 20 < 10 ? -5 : 5);
+      }
+      break;
+    case 'CONFUSED':
+      w = subtle?54:comic?62:56;
+      if (isRight) { h = blink ? h : (subtle?56:comic?66:60); cy += 10; }
+      else { h = blink ? h : (subtle?104:comic?116:110); }
+      break;
+    case 'EXCITED':
+      w = subtle?62:comic?76:68;
+      h = blink ? h : (subtle?74:comic?88:80);
+      carve_bottom = !blink; carve_bottom_h = subtle?12:comic?22:15;
+      break;
+    case 'SHAKE': {
+      const amp = T.shake_amp_px + (subtle?-4:comic?8:0);
+      const per = T.shake_period_ms + (subtle?80:comic?-80:0);
+      const ph = (2*Math.PI*(now%per)/per) + (isRight ? Math.PI/2 : -Math.PI/2);
+      const ay = amp * 0.55;
+      h = blink ? h : (subtle?96:comic?108:100); w = subtle?58:comic?68:62;
+      cx += Math.sin(ph) * amp;
+      cy += Math.abs(Math.sin(ph * 1.15)) * ay - ay * 0.55;
+      break;
+    }
+    case 'IDLE':
+    default: {
+      const idlePhase = Math.floor(now / 2400) % 4;
+      if (idlePhase === 0) {
+        h = blink ? 8 : (subtle?106:comic?118:114); w = subtle?54:comic?66:56;
+        cy += Math.sin(now/(subtle?700:comic?420:500)) * (subtle?4:comic?9:6);
+      } else if (idlePhase === 1) {
+        h = blink ? 8 : (subtle?100:comic?110:106); w = subtle?56:comic?68:60; cy += subtle?2:comic?4:3;
+        carve_top = !blink; carve_h = subtle?8:comic?14:10;
+        cx += Math.sin(now/(subtle?1000:comic?600:800)) * (subtle?10:comic?22:16);
+      } else if (idlePhase === 2) {
+        h = blink ? 8 : (subtle?92:comic?102:98); w = subtle?58:comic?70:64; cy += subtle?8:comic?12:10;
+        add_side_shadow = false;
+        cx += Math.sin(now/(subtle?520:comic?320:400)) * (subtle?8:comic?16:12);
+        cy -= Math.cos(now/(subtle?520:comic?320:400)) * (subtle?8:comic?16:12);
+      } else {
+        h = blink ? 8 : (subtle?104:comic?114:110); w = subtle?55:comic?64:58;
+        cx -= Math.sin(now/(subtle?900:comic?520:700)) * (subtle?7:comic?14:10);
+      }
+      break;
+    }
+  }
+
+  if (w < 10) w = 10;
+  if (h < 6) h = 6;
+
+  const isMail = emotion === 'MAIL';
+  const isCall = emotion === 'CALL';
+
+  const glow_pad  = subtle?6:comic?10:8;
+  const mid_pad   = subtle?2:comic?4:3;
+  const glow_base = subtle?14:comic?26:20;
+  const glow_hi   = subtle?46:comic?70:60;
+  const mid_base  = subtle?70:comic?96:86;
+  const mid_hi    = subtle?122:comic?156:140;
+
+  // Glow layer
+  roundedRect(ctx,
+    cx-(w+glow_pad)/2, cy-(h+glow_pad)/2, w+glow_pad, h+glow_pad,
+    'circle', color,
+    clamp(glow_base + pulse/4, 6, glow_hi) / 255
+  );
+
+  // Mid layer
+  roundedRect(ctx,
+    cx-(w+mid_pad)/2, cy-(h+mid_pad)/2, w+mid_pad, h+mid_pad,
+    'circle', color,
+    clamp(mid_base + pulse/4, 24, mid_hi) / 255
+  );
+
+  // Core
+  if (isMail || isCall) {
+    // transparent core – will draw icon later
+  } else {
+    roundedRect(ctx, cx-w/2, cy-h/2, w, h, 'circle', color, 1.0);
+  }
+
+  // Carve top
+  if (carve_top && carve_h > 0) {
+    carve(cx, cy - h/2 - 20 + (w+30)/2*0, 0, 0,
+      carve_dx, 0, carve_angle);
+    ctx.save();
+    ctx.translate(cx + carve_dx, cy - h/2 - 20 + (carve_h+30)/2);
+    if (carve_angle) ctx.rotate(carve_angle * Math.PI / 1800);
+    ctx.fillStyle = BG_COLOR;
+    ctx.fillRect(-(w+30)/2, -(carve_h+30)/2, w+30, carve_h+30);
+    ctx.restore();
+  }
+
+  // Inner clip (dizzy)
+  if (inner_clip && clip_w > 0) {
+    ctx.fillStyle = BG_COLOR;
+    if (isRight) ctx.fillRect(cx-w/2-2, cy-h/2-2, clip_w, h/2+4);
+    else         ctx.fillRect(cx+w/2-clip_w+2, cy-h/2-2, clip_w, h/2+4);
+  }
+
+  // Carve bottom
+  if (carve_bottom && carve_bottom_h > 0) {
+    ctx.fillStyle = BG_COLOR;
+    ctx.fillRect(cx-(w+20)/2, cy+h/2-carve_bottom_h+2, w+20, carve_bottom_h);
+  }
+
+  // Side shadow
+  if (add_side_shadow) {
+    const sw = subtle?8:comic?12:10;
+    const sx = cx + (isRight ? (w/2-sw/2+2) : (-w/2-sw/2-2));
+    ctx.save();
+    ctx.globalAlpha = 54/255;
+    roundedRect(ctx, sx-(sw/2), cy-(h-12)/2, sw, h-16, 'circle', '#1A2538');
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  // Angry brow
+  if (emotion === 'ANGRY' && !blink) {
+    const brow_w = subtle?34:comic?50:42;
+    const brow_h = subtle?4:comic?7:5;
+    const ang = subtle?(isRight?420:-420):(comic?(isRight?620:-620):(isRight?520:-520));
+    ctx.save();
+    ctx.translate(cx, cy - h/2 - (subtle?18:comic?24:20) + brow_h/2);
+    ctx.rotate(ang * Math.PI / 1800);
+    ctx.fillStyle = comic ? '#BFF3FF' : '#9FDFFF';
+    roundedRect(ctx, -brow_w/2, -brow_h/2, brow_w, brow_h, 2, comic?'#BFF3FF':'#9FDFFF');
+    ctx.restore();
+  }
+}
+
+// ====================================================
+//  AI Eye Renderer
+// ====================================================
+function drawEyeAI(cx, cy, emotion, isRight, blink, pulse) {
+  const color = EYE_AI;
+  const bg = BG_COLOR;
+  let w = 52, h = 96;
+  let carve_top=false, carve_h=0, carve_dx=0, carve_angle=0;
+  let carve_bottom=false, carve_bottom_h=0, add_brow=false;
+  const now = performance.now();
+
+  if (blink && emotion !== 'WOW') h = 8;
+
+  switch (emotion) {
+    case 'HAPPY':    w=56; h=blink?h:74; cy+=12; carve_bottom=!blink; carve_bottom_h=24; break;
+    case 'SAD':      w=52; h=blink?h:86; cy+=8; carve_top=!blink; carve_h=12; carve_dx=isRight?10:-10; carve_angle=isRight?-120:120; break;
+    case 'ANGRY':    w=50; h=blink?h:82; carve_top=!blink; carve_h=18; carve_dx=isRight?-12:12; carve_angle=isRight?260:-260; add_brow=!blink; break;
+    case 'WOW':      w=62; h=112; break;
+    case 'SLEEPY':   w=56; h=blink?h:12; cy+=30; break;
+    case 'CONFUSED': w=54; if(isRight){h=blink?h:58;cy+=9;}else{h=blink?h:96;} break;
+    case 'EXCITED':  w=66; h=blink?h:82; carve_bottom=!blink; carve_bottom_h=14; break;
+    case 'DIZZY':    w=44; h=blink?h:44; if(!blink){cx+=(Math.floor(now/45)%20<10?-5:5); cy+=(Math.floor(now/45)%20<10?-5:5);} break;
+    case 'SHAKE':    w=58; h=blink?h:106; cx+=Math.sin(now/45)*42; cy+=Math.cos(now/60)*42; break;
+    case 'IDLE':
+    default:         w=52; h=blink?8:98; cx+=Math.sin(now/900)*7; cy+=Math.sin(now/700)*4; break;
+  }
+  if (w<10)w=10; if(h<6)h=6;
+
+  // Glow
+  roundedRect(ctx, cx-(w+10)/2, cy-(h+10)/2, w+10, h+10, 'circle', color, clamp(24+pulse/4,10,70)/255);
+
+  // Core
+  if (emotion === 'MAIL' || emotion === 'CALL') {
+    // handled separately
+  } else {
+    roundedRect(ctx, cx-w/2, cy-h/2, w, h, 'circle', color, 1.0);
+  }
+
+  // Iris + spark
+  if (!blink && !['MAIL','CALL','SLEEPY'].includes(emotion)) {
+    const iw = w/3, ih = h/3;
+    roundedRect(ctx, cx-iw/2, cy-ih/2+2, iw, ih, 'circle', '#0B1B2A', 1.0);
+    roundedRect(ctx, cx-6, cy-h/6, 8, 8, 'circle', '#CCFFFF', 1.0);
+  }
+
+  // Carve top
+  if (carve_top && carve_h > 0) {
+    ctx.save();
+    ctx.translate(cx + carve_dx, cy - h/2 - 20 + (carve_h+30)/2);
+    if (carve_angle) ctx.rotate(carve_angle * Math.PI / 1800);
+    ctx.fillStyle = bg;
+    ctx.fillRect(-(w+30)/2, -(carve_h+30)/2, w+30, carve_h+30);
+    ctx.restore();
+  }
+  // Carve bottom
+  if (carve_bottom && carve_bottom_h > 0) {
+    ctx.fillStyle = bg;
+    ctx.fillRect(cx-(w+20)/2, cy+h/2-carve_bottom_h+2, w+20, carve_bottom_h);
+  }
+  // Brow
+  if (add_brow) {
+    ctx.save();
+    ctx.translate(cx, cy - h/2 - 12 + 3);
+    ctx.rotate((isRight?320:-320)*Math.PI/1800);
+    roundedRect(ctx, -17, -3, 34, 6, 'circle', '#BFF8FF');
+    ctx.restore();
+  }
+}
+
+// ====================================================
+//  ROUND Eye Renderer
+// ====================================================
+function drawEyeRound(cx, cy, emotion, isRight, blink, pulse) {
+  const color = EYE_ROUND;
+  const bg = BG_COLOR;
+  let w=44, h=44;
+  let carve_top=false, carve_h=0, carve_dx=0, carve_angle=0;
+  let carve_bottom=false, carve_bottom_h=0, carve_bottom_curve=false;
+  const now = performance.now();
+
+  if (blink && emotion !== 'WOW') h = 8;
+
+  switch (emotion) {
+    case 'HAPPY':    h=blink?h:44; carve_bottom=!blink; carve_bottom_h=24; cy+=5; break;
+    case 'SAD':      h=blink?h:44; cy+=5; if(!blink) carve_bottom_curve=true; break;
+    case 'ANGRY':    h=blink?h:38; w=42; cy-=1; carve_top=!blink; carve_h=20; carve_angle=isRight?220:-220; carve_dx=isRight?-6:6; break;
+    case 'WOW':      w=50; h=50; break;
+    case 'SLEEPY':   h=blink?h:10; cy+=15; break;
+    case 'CONFUSED': if(isRight){w=34;h=blink?h:34;cy+=5;} break;
+    case 'EXCITED':  w=50; h=blink?h:50; break;
+    case 'DIZZY':    w=30; h=blink?h:30; if(!blink){cx+=(Math.floor(now/50)%20<10?-4:4);cy+=(Math.floor(now/50)%20<10?-4:4);} break;
+    case 'IDLE':
+    default:         h=blink?8:44; break;
+  }
+  if(w<6)w=6; if(h<6)h=6;
+
+  // Glow
+  roundedRect(ctx, cx-(w+12)/2, cy-(h+12)/2, w+12, h+12, 'circle', color, clamp(40+pulse/3,10,80)/255);
+  // Core
+  roundedRect(ctx, cx-w/2, cy-h/2, w, h, 'circle', color, 1.0);
+
+  // Carve top
+  if (carve_top && carve_h > 0) {
+    ctx.save();
+    ctx.translate(cx+carve_dx, cy-h/2-12+(carve_h+24)/2);
+    if (carve_angle) ctx.rotate(carve_angle*Math.PI/1800);
+    ctx.fillStyle = bg;
+    ctx.fillRect(-(w+24)/2, -(carve_h+24)/2, w+24, carve_h+24);
+    ctx.restore();
+  }
+  // Angry brow
+  if (emotion === 'ANGRY' && !blink) {
+    ctx.save();
+    ctx.translate(cx, cy-h/2-8+2.5);
+    ctx.rotate((isRight?260:-260)*Math.PI/1800);
+    roundedRect(ctx,-13,-2.5,26,5,'circle','#9FDFFF');
+    ctx.restore();
+  }
+  // Carve bottom
+  if (carve_bottom && carve_bottom_h > 0) {
+    ctx.fillStyle = bg;
+    ctx.fillRect(cx-(w+20)/2, cy+h/2-carve_bottom_h+2, w+20, carve_bottom_h);
+  }
+  // Sad curve carve
+  if (carve_bottom_curve) {
+    const cw = w+24;
+    roundedRect(ctx, cx-cw/2+(isRight?6:-6), cy+h/2-16, cw, cw, 'circle', bg, 1.0);
+  }
+}
+
+// ====================================================
+//  Mouth (ROUND style only)
+// ====================================================
+function drawMouth(cx, cy, emotion, blink) {
+  if (blink) return;
+  const color = EYE_COLOR;
+
+  if (emotion === 'SAD') {
+    roundedRect(ctx, cx-10, cy+30, 20, 20, 'circle', null, 0);
+    ctx.strokeStyle = color; ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(cx, cy+30, 10, Math.PI*0.15, Math.PI*0.85);
+    ctx.stroke();
+  } else if (emotion === 'HAPPY' || emotion === 'EXCITED') {
+    ctx.strokeStyle = color; ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(cx, cy+20, 11, -Math.PI*0.85, -Math.PI*0.15);
+    ctx.stroke();
+  } else if (emotion === 'WOW' || emotion === 'CONFUSED') {
+    const ox = emotion==='CONFUSED' ? 10 : 0;
+    ctx.strokeStyle = color; ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.ellipse(cx+ox, cy+25, 6, 8, 0, 0, Math.PI*2);
+    ctx.stroke();
+  } else {
+    // Neutral line
+    ctx.strokeStyle = colorWithAlpha(color, 0.35);
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(cx-10, cy+32); ctx.lineTo(cx+10, cy+32);
+    ctx.stroke();
+  }
+}
+
+// ====================================================
+//  Sleepy ZZZ
+// ====================================================
+function drawZZZ(blink, now) {
+  const labels = ['ZZ','Z','Z'];
+  for (let i=0; i<3; i++) {
+    const phase = (now + i*680) % 2400;
+    if (phase < 2000) {
+      const x = CX + 50 + i*22 + Math.sin(phase/460*2*Math.PI)*10;
+      const y = CY - 42 - phase/26 - i*14;
+      const alpha = 1 - phase/2000;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = EYE_COLOR;
+      ctx.font = 'bold 16px Montserrat, Arial';
+      ctx.fillText(labels[i], x, y);
+      ctx.restore();
+    }
+  }
+}
+
+// ====================================================
+//  Main draw function
+// ====================================================
+function drawEye(cx, cy, emotion, isRight, blink) {
+  switch (currentStyle) {
+    case 'EVE':       drawEyeEVE(cx,cy,emotion,isRight,blink,'EVE',pulseShift); break;
+    case 'EVE_SUBTLE':drawEyeEVE(cx,cy,emotion,isRight,blink,'EVE_SUBTLE',pulseShift); break;
+    case 'EVE_COMIC': drawEyeEVE(cx,cy,emotion,isRight,blink,'EVE_COMIC',pulseShift); break;
+    case 'AI':        drawEyeAI(cx,cy,emotion,isRight,blink,pulseShift); break;
+    case 'ROUND':     drawEyeRound(cx,cy,emotion,isRight,blink,pulseShift); break;
+  }
+}
+
+function render(now) {
+  // FPS
+  fpsCount++;
+  if (now - fpsLast >= 1000) {
+    fps = fpsCount;
+    fpsCount = 0;
+    fpsLast = now;
+    document.getElementById('fpsDisplay').textContent = fps;
+  }
+
+  // --- Update blink ---
+  if (nextBlinkMs === 0) nextBlinkMs = now + T.blink_interval_ms;
+  if (now >= nextBlinkMs) {
+    blinkUntilMs = now + T.blink_duration_ms;
+    nextBlinkMs  = now + T.blink_interval_ms;
+    if (Math.random()*100 < T.double_blink_chance_pct) nextBlinkMs += 140;
+  }
+  const blink = (now < blinkUntilMs);
+
+  // --- Saccade ---
+  if (nextSaccadeMs === 0) nextSaccadeMs = now + rnd(T.saccade_min_ms, T.saccade_max_ms);
+  if (now >= nextSaccadeMs) {
+    saccadeDx = rnd(-T.saccade_amp_px, T.saccade_amp_px);
+    saccadeDy = rnd(-T.saccade_amp_px/2, T.saccade_amp_px/2);
+    nextSaccadeMs = now + rnd(T.saccade_min_ms, T.saccade_max_ms);
+  }
+
+  // --- Drift ---
+  if (now - lastDriftUpdate > 700) {
+    driftDx = rnd(-T.drift_amp_px, T.drift_amp_px);
+    driftDy = rnd(-T.drift_amp_px, T.drift_amp_px);
+    lastDriftUpdate = now;
+  }
+
+  // --- Glow pulse ---
+  const phase = (now % T.glow_pulse_period_ms) / T.glow_pulse_period_ms;
+  pulseShift = Math.sin(phase * 2 * Math.PI) * T.glow_pulse_amp;
+
+  // --- Auto cycle ---
+  if (autoCycle) {
+    autoCycleTimer += 16;
+    if (autoCycleTimer >= 2400) {
+      autoCycleTimer = 0;
+      autoCycleIdx = (autoCycleIdx + 1) % EMOTIONS.length;
+      currentEmotion = EMOTIONS[autoCycleIdx].id;
+      updateEmotionButtons();
+    }
+  }
+
+  const ox = driftDx + saccadeDx;
+  const oy = driftDy + saccadeDy;
+
+  const leftEmotion  = pairMode ? pairLeft  : currentEmotion;
+  const rightEmotion = pairMode ? pairRight : currentEmotion;
+
+  // --- Clear ---
+  drawBg();
+
+  // --- Draw eyes ---
+  drawEye(CX - EYE_GAP + ox, CY + oy, leftEmotion,  false, blink);
+  drawEye(CX + EYE_GAP + ox, CY + oy, rightEmotion, true,  blink);
+
+  // Mouth for ROUND style
+  if (currentStyle === 'ROUND') {
+    drawMouth(CX + ox, CY + oy, currentEmotion, blink);
+  }
+
+  // ZZZ for sleepy
+  if (leftEmotion === 'SLEEPY' || rightEmotion === 'SLEEPY') {
+    drawZZZ(blink, now);
+  }
+
+  // --- Status ---
+  document.getElementById('blinkStatus').textContent = blink ? '👁 blink' : '–';
+  document.getElementById('saccadeStatus').textContent = `${saccadeDx.toFixed(0)},${saccadeDy.toFixed(0)}`;
+  document.getElementById('emotionLabel').textContent = pairMode
+    ? `L:${pairLeft} R:${pairRight}`
+    : currentEmotion;
+
+  requestAnimationFrame(render);
+}
+
+// ============================================================
+//  UI Setup
+// ============================================================
+function updateEmotionButtons() {
+  document.querySelectorAll('.em-btn[data-main]').forEach(b => {
+    b.classList.toggle('active', b.dataset.emotion === currentEmotion);
+  });
+}
+
+function buildGrid(containerId, onClick, activeGetter, dataAttr) {
+  const grid = document.getElementById(containerId);
+  grid.innerHTML = '';
+  EMOTIONS.forEach(em => {
+    const btn = document.createElement('button');
+    btn.className = 'em-btn';
+    btn.dataset[dataAttr || 'emotion'] = em.id;
+    if (dataAttr === 'main') btn.dataset.main = '1';
+    btn.innerHTML = `<span class="icon">${em.icon}</span>${em.label}`;
+    btn.addEventListener('click', () => onClick(em.id, btn));
+    grid.appendChild(btn);
+  });
+}
+
+buildGrid('emotionGrid', (id, btn) => {
+  currentEmotion = id;
+  document.querySelectorAll('#emotionGrid .em-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}, () => currentEmotion, 'emotion');
+document.querySelectorAll('#emotionGrid .em-btn').forEach(b => b.dataset.main = '1');
+document.querySelector('#emotionGrid .em-btn').classList.add('active');
+
+buildGrid('pairLeftGrid', (id, btn) => {
+  pairLeft = id;
+  document.querySelectorAll('#pairLeftGrid .em-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}, () => pairLeft, 'emotion');
+
+buildGrid('pairRightGrid', (id, btn) => {
+  pairRight = id;
+  document.querySelectorAll('#pairRightGrid .em-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}, () => pairRight, 'emotion');
+
+// Style buttons
+const styleRow = document.getElementById('styleRow');
+STYLES.forEach(s => {
+  const btn = document.createElement('button');
+  btn.className = 'style-btn' + (s === 'EVE' ? ' active' : '');
+  btn.textContent = s.replace('EVE_','EVE ').replace('_',' ');
+  btn.addEventListener('click', () => {
+    currentStyle = s;
+    document.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+  styleRow.appendChild(btn);
+});
+
+// Cycle button
+document.getElementById('cycleBtn').addEventListener('click', function() {
+  autoCycle = !autoCycle;
+  this.classList.toggle('on', autoCycle);
+  this.textContent = `Auto-Cycle: ${autoCycle ? 'ON' : 'OFF'}`;
+});
+
+// Pair mode button
+document.getElementById('pairBtn').addEventListener('click', function() {
+  pairMode = !pairMode;
+  this.classList.toggle('on', pairMode);
+  this.textContent = `Pair-Mode: ${pairMode ? 'ON' : 'OFF'}`;
+  document.getElementById('pairRow').style.display = pairMode ? '' : 'none';
+  document.getElementById('emotionGrid').style.opacity = pairMode ? '0.4' : '1';
+});
+
+// ---- Start ----
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
