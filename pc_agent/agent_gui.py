@@ -25,7 +25,7 @@ EMOTIONS = [
 
 EVENTS = ["CALL", "MAIL", "TEAMS", "LOUD", "VERY_LOUD", "TILT", "SHAKE", "QUIET"]
 
-STYLES = ["EVE_CINEMATIC"]
+STYLES = ["EVE_CINEMATIC", "FLUX"]
 
 TUNE_KEYS = [
     "drift_amp_px",

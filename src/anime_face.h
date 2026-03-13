@@ -27,6 +27,7 @@ typedef enum {
 
 typedef enum {
   FACE_STYLE_EVE_CINEMATIC = 0,
+  FACE_STYLE_FLUX,
   FACE_STYLE_ROUND,
   FACE_STYLE_EVE_SUBTLE,
   FACE_STYLE_EVE_COMIC,
@@ -47,6 +48,9 @@ class AnimeFace {
     int glow_pulse_period_ms;
     int shake_amp_px;
     int shake_period_ms;
+    int eye_color_r;
+    int eye_color_g;
+    int eye_color_b;
   };
 
   AnimeFace();
@@ -85,6 +89,7 @@ class AnimeFace {
   void drawMouth(int16_t cx, int16_t cy, Emotion e, bool blink);
   void drawEye(int16_t cx, int16_t cy, Emotion e, bool isRight, bool blink);
   void drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool blink);
+  void drawEyeFlux(int16_t cx, int16_t cy, Emotion e, bool isRight, bool blink);
   void drawEyeAI(int16_t cx, int16_t cy, Emotion e, bool isRight, bool blink);
   void drawEyeRound(int16_t cx, int16_t cy, Emotion e, bool isRight, bool blink);
 };
