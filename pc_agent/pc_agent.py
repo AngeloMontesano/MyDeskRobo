@@ -136,7 +136,7 @@ def parse_args():
         help="basic=outlook+calendar, all=all monitors",
     )
     p.add_argument("--send", type=int, default=None, help="one-shot emotion byte")
-    p.add_argument("--style", type=str, default=None, help="set eye style (EVE/EVE_CINEMATIC)")
+    p.add_argument("--style", type=str, default=None, help="set eye style (EVE/EVE_CINEMATIC/FLUX)")
     p.add_argument("--backlight", type=int, default=None, help="set backlight 0..100")
     p.add_argument("--status-label", choices=["on", "off"], default=None, help="show/hide bottom status label")
     p.add_argument("--event", type=str, default=None, help="trigger event by name (CALL/MAIL/TEAMS/LOUD/...)")
@@ -144,7 +144,7 @@ def parse_args():
     p.add_argument("--emotion-hold", type=int, default=3500, help="hold duration for --emotion-name")
     p.add_argument("--eyes", type=str, default=None, help="set eye pair LEFT:RIGHT[:HOLD_MS]")
     p.add_argument("--tune", action="append", default=[], help="set tuning key=value (repeatable)")
-    p.add_argument("--cmd", action="append", default=[], help="raw CMD payload, e.g. STYLE:EVE_CINEMATIC")
+    p.add_argument("--cmd", action="append", default=[], help="raw CMD payload, e.g. STYLE:EVE_CINEMATIC or STYLE:FLUX")
     return p.parse_args()
 
 

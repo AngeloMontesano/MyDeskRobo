@@ -176,13 +176,23 @@ static void show_boot_splash(uint32_t now) {
 }
 
 static FaceStyle to_face_style(DeskRoboFaceStyle style) {
-  (void)style;
-  return FACE_STYLE_EVE_CINEMATIC;
+  switch (style) {
+    case DESKROBO_STYLE_FLUX:
+      return FACE_STYLE_FLUX;
+    case DESKROBO_STYLE_EVE:
+    default:
+      return FACE_STYLE_EVE_CINEMATIC;
+  }
 }
 
 static const char *style_name(DeskRoboFaceStyle style) {
-  (void)style;
-  return "EVE_CINEMATIC";
+  switch (style) {
+    case DESKROBO_STYLE_FLUX:
+      return "FLUX";
+    case DESKROBO_STYLE_EVE:
+    default:
+      return "EVE_CINEMATIC";
+  }
 }
 
 static bool parse_style_name(const char *name, DeskRoboFaceStyle &out) {
@@ -191,6 +201,10 @@ static bool parse_style_name(const char *name, DeskRoboFaceStyle &out) {
       (strcmp(name, "EVE_CINEMATIC") == 0) ||
       (strcmp(name, "eve_cinematic") == 0)) {
     out = DESKROBO_STYLE_EVE;
+    return true;
+  }
+  if ((strcmp(name, "FLUX") == 0) || (strcmp(name, "flux") == 0)) {
+    out = DESKROBO_STYLE_FLUX;
     return true;
   }
   return false;
@@ -548,6 +562,9 @@ bool DeskRobo_LoadTuning() {
       s_prefs.getInt("gyro_tilt_cooldown", s_gyro_tilt_cooldown_ms);
   s_prefs.end();
   switch (face_style) {
+    case (int)DESKROBO_STYLE_FLUX:
+      s_face_style = DESKROBO_STYLE_FLUX;
+      break;
     case 0:
     case (int)DESKROBO_STYLE_EVE:
     default:
@@ -624,8 +641,9 @@ void DeskRobo_SetBleConnected(bool connected) {
 
 void DeskRobo_PushEvent(DeskRoboEventType event_type) {
   const uint32_t now = millis();
+  // Tilt can happen continuously on a stand and must not keep the
+  // screensaver/standby timer alive.
   const bool is_motion_wake = (event_type == DESKROBO_EVENT_MOTION_SHAKE) ||
-                              (event_type == DESKROBO_EVENT_MOTION_TILT) ||
                               (event_type == DESKROBO_EVENT_MOTION_TAP);
   const bool is_user_interaction = is_motion_wake ||
                                    (event_type == DESKROBO_EVENT_PC_CALL) ||

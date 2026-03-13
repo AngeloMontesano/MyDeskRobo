@@ -145,6 +145,10 @@ bool parseStyleCode(const String &name, uint8_t &out) {
     out = (uint8_t)DESKROBO_STYLE_EVE;
     return true;
   }
+  if (name == "FLUX") {
+    out = (uint8_t)DESKROBO_STYLE_FLUX;
+    return true;
+  }
   return false;
 }
 
@@ -526,7 +530,11 @@ void DeskRoboBLE_Loop() {
         break;
       }
       case CMD_SET_STYLE: {
-        (void)DeskRobo_SetStyleByName("EVE_CINEMATIC");
+        if (cmd.a == (uint8_t)DESKROBO_STYLE_FLUX) {
+          (void)DeskRobo_SetStyleByName("FLUX");
+        } else {
+          (void)DeskRobo_SetStyleByName("EVE_CINEMATIC");
+        }
         break;
       }
       case CMD_SET_STATUS_LABEL:

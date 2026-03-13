@@ -54,6 +54,7 @@ small{opacity:0.6;font-size:0.8rem;display:block;margin-top:8px}
 <div class=card><h3>Eye Style</h3>
 <div class=grid>
 <button onclick="setStyle('EVE_CINEMATIC')">EVE</button>
+<button onclick="setStyle('FLUX')">FLUX</button>
 </div>
 <small>Style applies instantly.</small>
 </div>
