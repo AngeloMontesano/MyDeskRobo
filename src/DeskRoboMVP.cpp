@@ -64,6 +64,14 @@
 #define DESKROBO_IDLE_ROUND_ROBIN_PRIORITY 5
 #endif
 
+#ifndef DESKROBO_FW_VERSION
+#define DESKROBO_FW_VERSION "0.1"
+#endif
+
+#ifndef DESKROBO_BOOT_SPLASH_MS
+#define DESKROBO_BOOT_SPLASH_MS 2800UL
+#endif
+
 typedef struct {
   DeskRoboEmotion emotion;
   uint8_t priority;
@@ -109,6 +117,63 @@ static int32_t s_audio_baseline = 0;
 static int32_t s_audio_level = 0;
 static Preferences s_prefs;
 static DeskRoboFaceStyle s_face_style = DESKROBO_STYLE_EVE;
+static lv_obj_t *s_boot_splash = nullptr;
+static uint32_t s_boot_splash_until_ms = 0;
+static void show_boot_splash(uint32_t now) {
+  if (s_boot_splash) {
+    lv_obj_del(s_boot_splash);
+    s_boot_splash = nullptr;
+  }
+
+  s_boot_splash = lv_obj_create(lv_scr_act());
+  lv_obj_remove_style_all(s_boot_splash);
+  lv_obj_set_size(s_boot_splash, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+  lv_obj_set_pos(s_boot_splash, 0, 0);
+  lv_obj_set_style_bg_color(s_boot_splash, lv_color_hex(0x05070B), 0);
+  lv_obj_set_style_bg_opa(s_boot_splash, LV_OPA_COVER, 0);
+  lv_obj_clear_flag(s_boot_splash, LV_OBJ_FLAG_SCROLLABLE);
+
+  lv_obj_t *logo_ring = lv_obj_create(s_boot_splash);
+  lv_obj_remove_style_all(logo_ring);
+  lv_obj_set_size(logo_ring, 126, 126);
+  lv_obj_align(logo_ring, LV_ALIGN_CENTER, 0, -58);
+  lv_obj_set_style_radius(logo_ring, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_color(logo_ring, lv_color_hex(0x0A1320), 0);
+  lv_obj_set_style_bg_opa(logo_ring, LV_OPA_40, 0);
+  lv_obj_set_style_border_width(logo_ring, 4, 0);
+  lv_obj_set_style_border_color(logo_ring, lv_color_hex(0x0FDAFF), 0);
+
+  lv_obj_t *eye_l = lv_obj_create(logo_ring);
+  lv_obj_remove_style_all(eye_l);
+  lv_obj_set_size(eye_l, 26, 38);
+  lv_obj_set_pos(eye_l, 30, 38);
+  lv_obj_set_style_radius(eye_l, 8, 0);
+  lv_obj_set_style_bg_color(eye_l, lv_color_hex(0x0FDAFF), 0);
+  lv_obj_set_style_bg_opa(eye_l, LV_OPA_COVER, 0);
+
+  lv_obj_t *eye_r = lv_obj_create(logo_ring);
+  lv_obj_remove_style_all(eye_r);
+  lv_obj_set_size(eye_r, 26, 38);
+  lv_obj_set_pos(eye_r, 70, 38);
+  lv_obj_set_style_radius(eye_r, 8, 0);
+  lv_obj_set_style_bg_color(eye_r, lv_color_hex(0x0FDAFF), 0);
+  lv_obj_set_style_bg_opa(eye_r, LV_OPA_COVER, 0);
+
+  lv_obj_t *title = lv_label_create(s_boot_splash);
+  lv_label_set_text(title, "My Robo Desk");
+  lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
+  lv_obj_set_style_text_color(title, lv_color_hex(0xD7EEFF), 0);
+  lv_obj_align(title, LV_ALIGN_CENTER, 0, 34);
+
+  lv_obj_t *version = lv_label_create(s_boot_splash);
+  lv_label_set_text_fmt(version, "v%s", DESKROBO_FW_VERSION);
+  lv_obj_set_style_text_font(version, &lv_font_montserrat_12, 0);
+  lv_obj_set_style_text_color(version, lv_color_hex(0x79A7C9), 0);
+  lv_obj_align(version, LV_ALIGN_CENTER, 0, 58);
+
+  lv_obj_move_foreground(s_boot_splash);
+  s_boot_splash_until_ms = now + DESKROBO_BOOT_SPLASH_MS;
+}
 
 static FaceStyle to_face_style(DeskRoboFaceStyle style) {
   (void)style;
@@ -733,6 +798,7 @@ void DeskRobo_Init() {
 
   DeskRobo_LoadTuning();
   apply_emotion_style();
+  show_boot_splash(millis());
 }
 
 DeskRoboEmotion DeskRobo_GetEmotion() { return s_current_emotion; }
@@ -742,6 +808,11 @@ void DeskRobo_Loop() {
 
   if (!s_ble_connected) {
     apply_ble_disconnect_policy(now);
+  }
+
+  if (s_boot_splash && (now >= s_boot_splash_until_ms)) {
+    lv_obj_del(s_boot_splash);
+    s_boot_splash = nullptr;
   }
 
   if ((s_current_priority > 0) && (now > s_emotion_expiry_ms)) {
