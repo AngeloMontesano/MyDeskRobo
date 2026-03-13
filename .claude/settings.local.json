@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /c/Users/amon/Documents/esp32-s3-lcd-idf/.claude/worktrees/clever-cartwright/src -name *.h -o -name *.cpp)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(ls /c/Users/amon/Documents/esp32-s3-lcd-idf/.claude/worktrees/clever-cartwright/pc_agent/.venv/Scripts/python*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(command -v gh)",
+      "Bash(where gh:*)",
+      "Read(//c/Users/amon/AppData/Local/GitHubCLI/bin/**)",
+      "Read(//c/Program Files/GitHub CLI/**)"
+    ]
+  }
+}
