@@ -51,6 +51,7 @@ bool DeskRobo_SaveTuning();
 bool DeskRobo_LoadTuning();
 bool DeskRobo_SetStyleByName(const char *name);
 const char *DeskRobo_GetStyleName();
+void DeskRobo_SetBacklightLevel(uint8_t value);
 void DeskRobo_SetStatusLabelVisible(bool visible);
 bool DeskRobo_GetStatusLabelVisible();
 void DeskRobo_SetBleConnected(bool connected);

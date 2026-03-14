@@ -74,6 +74,8 @@ lv_obj_t *g_status_label = nullptr;
 lv_obj_t *g_scene_label = nullptr;
 lv_obj_t *g_sleep_labels[3] = {nullptr, nullptr, nullptr};
 lv_obj_t *g_confused_label = nullptr;
+lv_obj_t *g_boot_splash = nullptr;
+uint32_t g_boot_splash_started_ms = 0;
 
 Preferences g_prefs;
 NextgenTuning g_tuning;
@@ -105,12 +107,13 @@ static constexpr uint32_t kIdleRoundRobinIntervalMs = 15UL * 1000UL;
 static constexpr uint32_t kIdleRoundRobinShowMs = 8000UL;
 static constexpr uint8_t kIdleRoundRobinPriority = 5;
 static constexpr uint8_t kScreensaverDimPct = 35;
+static constexpr uint32_t kBootSplashMs = 2800UL;
+static constexpr const char *kBootBrand = "My Robo Desk";
+static constexpr const char *kBootVersion = "v0.5";
 static constexpr DeskRoboEmotion kIdleRound[] = {
     DESKROBO_EMOTION_HAPPY,
     DESKROBO_EMOTION_SAD,
-    DESKROBO_EMOTION_ANGRY_SOFT,
     DESKROBO_EMOTION_ANGRY,
-    DESKROBO_EMOTION_ANGRY_HARD,
     DESKROBO_EMOTION_WOW,
     DESKROBO_EMOTION_SLEEPY,
     DESKROBO_EMOTION_CONFUSED,
@@ -118,6 +121,9 @@ static constexpr DeskRoboEmotion kIdleRound[] = {
     DESKROBO_EMOTION_XX,
     DESKROBO_EMOTION_GLITCH,
 };
+
+void reset_blink_state();
+void reset_glitch_fx();
 
 const char *emotion_name(DeskRoboEmotion emotion) {
   switch (emotion) {
@@ -208,7 +214,34 @@ void update_status_label() {
 
 void update_scene_label(const char *scene_name) {
   if (!g_scene_label) return;
-  lv_label_set_text_fmt(g_scene_label, "%s", scene_name ? scene_name : "scene");
+  const bool show = scene_name && strstr(scene_name, "render_fail");
+  if (!show) {
+    lv_obj_add_flag(g_scene_label, LV_OBJ_FLAG_HIDDEN);
+    return;
+  }
+  lv_obj_clear_flag(g_scene_label, LV_OBJ_FLAG_HIDDEN);
+  lv_label_set_text_fmt(g_scene_label, "%s", scene_name);
+}
+
+void update_boot_splash() {
+  if (!g_boot_splash) return;
+  if ((millis() - g_boot_splash_started_ms) < kBootSplashMs) {
+    lv_obj_clear_flag(g_boot_splash, LV_OBJ_FLAG_HIDDEN);
+    return;
+  }
+
+  lv_obj_del(g_boot_splash);
+  g_boot_splash = nullptr;
+  g_current_emotion = DESKROBO_EMOTION_IDLE;
+  g_left_eye_emotion = DESKROBO_EMOTION_IDLE;
+  g_right_eye_emotion = DESKROBO_EMOTION_IDLE;
+  g_eye_pair_active = false;
+  g_current_priority = 0;
+  g_emotion_expiry_ms = 0;
+  g_eye_pair_expiry_ms = 0;
+  g_last_idle_round_ms = millis();
+  reset_blink_state();
+  reset_glitch_fx();
 }
 
 void reset_blink_state() {
@@ -261,12 +294,12 @@ RuntimeState make_runtime_state(const EyeSceneSpec &scene, lv_color_t color, boo
   uint16_t saccade_x_period = (uint16_t)g_tuning.saccade_min_ms;
   uint16_t saccade_y_period = (uint16_t)g_tuning.saccade_max_ms;
   if (strcmp(scene.name, "eve_shake") == 0) {
-    drift_amp = g_tuning.shake_amp_px;
-    saccade_amp = g_tuning.shake_amp_px / 2;
-    drift_x_period = (uint16_t)g_tuning.shake_period_ms;
-    drift_y_period = (uint16_t)max(120, g_tuning.shake_period_ms + 100);
-    saccade_x_period = (uint16_t)max(120, g_tuning.shake_period_ms / 2);
-    saccade_y_period = (uint16_t)max(180, g_tuning.shake_period_ms);
+    drift_amp = max(6, g_tuning.shake_amp_px / 2);
+    saccade_amp = 0;
+    drift_x_period = (uint16_t)max(360, g_tuning.shake_period_ms + 80);
+    drift_y_period = (uint16_t)max(460, g_tuning.shake_period_ms + 180);
+    saccade_x_period = 0;
+    saccade_y_period = 0;
   }
   state.drift_x = wave_value(now, drift_x_period, drift_amp, false);
   state.drift_y = wave_value(now, drift_y_period, drift_amp / 2, true);
@@ -440,6 +473,7 @@ void create_ui() {
   lv_obj_set_style_pad_bottom(g_scene_label, 4, 0);
   lv_obj_set_style_radius(g_scene_label, 10, 0);
   lv_obj_align(g_scene_label, LV_ALIGN_TOP_MID, 0, 12);
+  lv_obj_add_flag(g_scene_label, LV_OBJ_FLAG_HIDDEN);
 
   g_status_label = lv_label_create(lv_scr_act());
   lv_obj_set_style_text_color(g_status_label, lv_color_make(0xD7, 0xEE, 0xFF), 0);
@@ -477,6 +511,52 @@ void create_ui() {
   lv_obj_set_style_bg_opa(g_confused_label, LV_OPA_TRANSP, 0);
   lv_obj_add_flag(g_confused_label, LV_OBJ_FLAG_HIDDEN);
   lv_obj_set_pos(g_confused_label, 250, 28);
+
+  g_boot_splash = lv_obj_create(lv_scr_act());
+  lv_obj_remove_style_all(g_boot_splash);
+  lv_obj_clear_flag(g_boot_splash, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_size(g_boot_splash, EXAMPLE_LCD_WIDTH, EXAMPLE_LCD_HEIGHT);
+  lv_obj_set_style_bg_color(g_boot_splash, lv_color_hex(0x06080D), 0);
+  lv_obj_set_style_bg_opa(g_boot_splash, LV_OPA_COVER, 0);
+  lv_obj_center(g_boot_splash);
+
+  lv_obj_t *logo = lv_obj_create(g_boot_splash);
+  lv_obj_remove_style_all(logo);
+  lv_obj_set_size(logo, 88, 88);
+  lv_obj_set_style_radius(logo, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_color(logo, lv_color_hex(0x0A1017), 0);
+  lv_obj_set_style_bg_opa(logo, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_width(logo, 2, 0);
+  lv_obj_set_style_border_color(logo, lv_color_make(0x0F, 0xDA, 0xFF), 0);
+  lv_obj_align(logo, LV_ALIGN_TOP_MID, 0, 62);
+
+  lv_obj_t *eye_l = lv_obj_create(logo);
+  lv_obj_remove_style_all(eye_l);
+  lv_obj_set_size(eye_l, 16, 28);
+  lv_obj_set_style_radius(eye_l, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_color(eye_l, lv_color_make(0x0F, 0xDA, 0xFF), 0);
+  lv_obj_set_style_bg_opa(eye_l, LV_OPA_COVER, 0);
+  lv_obj_align(eye_l, LV_ALIGN_CENTER, -14, 0);
+
+  lv_obj_t *eye_r = lv_obj_create(logo);
+  lv_obj_remove_style_all(eye_r);
+  lv_obj_set_size(eye_r, 16, 28);
+  lv_obj_set_style_radius(eye_r, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_color(eye_r, lv_color_make(0x0F, 0xDA, 0xFF), 0);
+  lv_obj_set_style_bg_opa(eye_r, LV_OPA_COVER, 0);
+  lv_obj_align(eye_r, LV_ALIGN_CENTER, 14, 0);
+
+  lv_obj_t *title = lv_label_create(g_boot_splash);
+  lv_label_set_text(title, kBootBrand);
+  lv_obj_set_style_text_color(title, lv_color_make(0xD7, 0xEE, 0xFF), 0);
+  lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
+  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 176);
+
+  lv_obj_t *version = lv_label_create(g_boot_splash);
+  lv_label_set_text(version, kBootVersion);
+  lv_obj_set_style_text_color(version, lv_color_make(0x6A, 0xD7, 0xF5), 0);
+  lv_obj_set_style_text_font(version, &lv_font_montserrat_16, 0);
+  lv_obj_align(version, LV_ALIGN_TOP_MID, 0, 212);
 
   static LayerRenderer left_renderer(g_left_canvas);
   static LayerRenderer right_renderer(g_right_canvas);
@@ -590,6 +670,7 @@ void DeskRobo_Init() {
   create_ui();
   load_prefs_values();
   g_last_interaction_ms = millis();
+  g_boot_splash_started_ms = g_last_interaction_ms;
   reset_blink_state();
   reset_glitch_fx();
   update_status_label();
@@ -601,6 +682,7 @@ void DeskRobo_Loop() {
   apply_sleep_policy();
   update_status_label();
   render_active();
+  update_boot_splash();
 }
 
 void DeskRobo_PushEvent(DeskRoboEventType event_type) {
@@ -733,6 +815,15 @@ bool DeskRobo_SetStyleByName(const char *name) {
 
 const char *DeskRobo_GetStyleName() { return style_name(g_style); }
 
+void DeskRobo_SetBacklightLevel(uint8_t value) {
+  const uint8_t v = (uint8_t)constrain((int)value, 0, 100);
+  g_backlight_before_sleep = v > 0 ? v : g_backlight_before_sleep;
+  g_display_sleep_off = false;
+  g_display_dimmed = false;
+  Set_Backlight(v);
+  g_last_interaction_ms = millis();
+}
+
 void DeskRobo_SetStatusLabelVisible(bool visible) {
   g_status_label_visible = visible;
   update_status_label();
@@ -744,6 +835,8 @@ void DeskRobo_SetBleConnected(bool connected) {
   g_ble_connected = connected;
   if (connected) mark_interaction(millis());
 }
+
+
 
 
 

@@ -1,11 +1,54 @@
 # MyDeskRobo Quickstart
 
-This quickstart describes the current public runtime target.
+This is the practical flashing guide for the current release.
+It assumes Windows and the Waveshare ESP32-S3-LCD-1.85.
 
-## 1. Build and Flash
+## 1. Requirements
 
-Target:
-- `esp32-s3-mydeskrobo-full`
+Hardware:
+- Waveshare ESP32-S3-LCD-1.85
+- USB data cable
+- Windows PC with Bluetooth
+
+Software:
+- VS Code with PlatformIO
+- or PlatformIO Core installed locally
+- Python 3.11+ recommended for the PC agent
+
+## 2. Get the Project
+
+Clone or download the repository, then open it in VS Code / PlatformIO.
+
+Project root:
+```text
+MyDeskRobo
+```
+
+## 3. Check the COM Port
+
+The repo currently defaults to `COM5` in [platformio.ini](platformio.ini).
+If your device appears on another port, change these lines:
+
+```ini
+upload_port = COM5
+monitor_port = COM5
+```
+
+Set them to your real port, for example `COM3` or `COM7`.
+
+## 4. Optional: Erase Old Settings First
+
+Recommended before first public flash or after larger updates.
+This clears stored tuning values from NVS.
+
+```powershell
+$env:PYTHONIOENCODING='utf-8'
+$env:PYTHONUTF8='1'
+chcp 65001 > $null
+& "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run -e esp32-s3-mydeskrobo-full -t erase
+```
+
+## 5. Build and Flash
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'
@@ -14,50 +57,39 @@ chcp 65001 > $null
 & "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run -e esp32-s3-mydeskrobo-full -t upload
 ```
 
-## 2. First Boot
+## 6. Optional: Serial Monitor
 
-MyDeskRobo waits up to 60 seconds for configured STA Wi-Fi.
+Use this if you want boot logs or want to debug startup.
 
-If Wi-Fi connects in time:
-- Wi-Fi stays active
-- BLE starts
+```powershell
+$env:PYTHONIOENCODING='utf-8'
+$env:PYTHONUTF8='1'
+chcp 65001 > $null
+& "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" device monitor -b 115200 -p COM5
+```
 
-If Wi-Fi does not connect in time:
-- AP/STA Wi-Fi is turned off
-- BLE starts
+Adjust `COM5` if needed.
 
-During setup/AP window:
-- SSID: `MyDeskRobo-Setup`
-- Password: `deskrobo123`
-- URL: `http://192.168.4.1/`
+## 7. What You Should See After Boot
 
-## 3. Web Frontend
+On the display:
+- boot logo
+- `My Robo Desk`
+- `v0.5`
+- then the EVE face
 
-The embedded frontend provides:
-- emotion buttons
-- eye pair override
-- EVE style apply
-- backlight control
-- Wi-Fi setup
-- audio test
-- debug status label toggle
-- idle tuning save/load
-- OTA update
+Expected runtime behavior:
+- BLE starts automatically
+- no Wi-Fi setup is required for the current release
+- `IDLE` is the base state
+- after inactivity, the idle rotation starts automatically
+- after about 10 minutes without BLE activity, sleepy/screensaver behavior begins
+- after about 15 minutes, the display can turn off
+- shaking wakes the device and plays the shake animation
 
-## 4. Main HTTP Calls
+## 8. PC Agent GUI
 
-- `GET /api/status`
-- `POST /api/emotion?name=HAPPY&hold=3500`
-- `POST /api/eyes?left=IDLE&right=WINK&hold=5000`
-- `POST /api/style?name=EVE`
-- `POST /api/backlight?value=65`
-- `POST /api/event?name=CALL`
-- `POST /api/tune/save`
-- `POST /api/ota`
-
-## 5. PC Agent
-
-Setup:
+Setup once:
 
 ```powershell
 cd pc_agent
@@ -65,21 +97,37 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-GUI:
-- `start_pc_agent.bat`
-- or `pc_agent\start_agent_gui.bat`
+Start GUI:
+- double-click `start_pc_agent.bat`
+- or run `pc_agent\start_agent_gui.bat`
 
-Console fallback:
+What the GUI is for:
+- send emotions over BLE
+- set eye color
+- change motion and blink tuning
+- change sleep/display timers
+- factory reset the device
 
-```powershell
-cd pc_agent
-.\.venv\Scripts\python.exe pc_agent.py --mode basic
-```
+## 9. If Flashing Fails
 
-## 6. Validation
+Check these points:
+- correct USB data cable
+- correct COM port in `platformio.ini`
+- no serial monitor is still open on the same port
+- board is powered and not stuck in another boot mode
+
+## 10. If the Face Looks Wrong After Flashing
+
+Do this in order:
+1. use `Factory Reset` in the PC GUI
+2. if needed, erase flash again with `-t erase`
+3. flash again
+
+This matters because old saved tuning values survive a normal firmware upload.
+
+## 11. Minimal Validation
 
 Firmware build:
-
 ```powershell
 $env:PYTHONIOENCODING='utf-8'
 $env:PYTHONUTF8='1'
@@ -87,12 +135,7 @@ chcp 65001 > $null
 & "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run -e esp32-s3-mydeskrobo-full
 ```
 
-Python check:
-
+Python validation:
 ```powershell
 python -m py_compile pc_agent\pc_agent.py pc_agent\agent_gui.py pc_agent\ble_client.py
 ```
-
-## 7. Release Note
-
-Add a real `LICENSE` file before publishing the repository publicly.

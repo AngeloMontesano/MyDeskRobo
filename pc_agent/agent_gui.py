@@ -3,7 +3,7 @@ import queue
 import threading
 import tkinter as tk
 from datetime import datetime
-from tkinter import colorchooser, ttk
+from tkinter import colorchooser, messagebox, ttk
 
 import pc_agent as agent_runtime
 
@@ -12,7 +12,9 @@ BASE_EMOTIONS = [
     "IDLE",
     "HAPPY",
     "SAD",
+    "ANGRY_SOFT",
     "ANGRY",
+    "ANGRY_HARD",
     "WOW",
     "SLEEPY",
     "CONFUSED",
@@ -24,8 +26,6 @@ BASE_EMOTIONS = [
     "GLITCH",
 ]
 EVENTS = ["CALL", "MAIL", "TEAMS", "LOUD", "VERY_LOUD", "TILT", "SHAKE", "QUIET"]
-
-STYLES = ["EVE"]
 
 TUNE_KEYS = [
     "drift_amp_px",
@@ -151,19 +151,18 @@ class AgentApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("MyDeskRobo PC Agent")
-        self.root.geometry("980x760")
-        self.root.minsize(900, 700)
+        self.root.geometry("1020x780")
+        self.root.minsize(920, 720)
 
         self.event_queue: "queue.Queue[tuple]" = queue.Queue()
         self.controller = AgentController(self.event_queue)
 
-        self.mode_var = tk.StringVar(value="basic")
+        self.mode_var = tk.StringVar(value="all")
         self.state_var = tk.StringVar(value="Nicht gestartet")
-        self.detail_var = tk.StringVar(value="")
+        self.detail_var = tk.StringVar(value="Der Agent verbindet sich nach dem Start automatisch per BLE.")
 
         self.emotion_var = tk.StringVar(value="IDLE")
         self.emotion_hold_var = tk.StringVar(value="3500")
-        self.style_var = tk.StringVar(value="EVE")
         self.backlight_var = tk.IntVar(value=65)
         self.status_label_var = tk.BooleanVar(value=False)
         self.left_eye_var = tk.StringVar(value="IDLE")
@@ -178,6 +177,7 @@ class AgentApp:
         self._update_buttons()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.after(200, self._poll_events)
+        self.root.after(300, self._on_start)
 
     def _build_ui(self) -> None:
         container = ttk.Frame(self.root, padding=12)
@@ -185,22 +185,21 @@ class AgentApp:
 
         top = ttk.Frame(container)
         top.pack(fill=tk.X)
-
-        ttk.Label(top, text="Modus:").pack(side=tk.LEFT)
+        ttk.Label(top, text="Agent-Modus:").pack(side=tk.LEFT)
         ttk.Combobox(
             top,
             textvariable=self.mode_var,
-            values=("basic", "all", "teams", "mic"),
+            values=("all", "basic", "teams", "mic"),
             width=12,
             state="readonly",
-        ).pack(side=tk.LEFT, padx=(8, 16))
+        ).pack(side=tk.LEFT, padx=(8, 14))
+        ttk.Button(top, text="Starten", command=self._on_start).pack(side=tk.LEFT)
+        ttk.Button(top, text="Stoppen", command=self._on_stop).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Label(top, text="all = alles, basic = Outlook + Kalender").pack(side=tk.LEFT, padx=(16, 0))
+        self.start_btn = top.winfo_children()[2]
+        self.stop_btn = top.winfo_children()[3]
 
-        self.start_btn = ttk.Button(top, text="Start", command=self._on_start)
-        self.start_btn.pack(side=tk.LEFT)
-        self.stop_btn = ttk.Button(top, text="Stop", command=self._on_stop)
-        self.stop_btn.pack(side=tk.LEFT, padx=8)
-
-        status = ttk.LabelFrame(container, text="Status", padding=10)
+        status = ttk.LabelFrame(container, text="Verbindung", padding=12)
         status.pack(fill=tk.X, pady=(10, 10))
         ttk.Label(status, textvariable=self.state_var, font=("Segoe UI", 11, "bold")).pack(anchor="w")
         ttk.Label(status, textvariable=self.detail_var).pack(anchor="w", pady=(4, 0))
@@ -212,9 +211,9 @@ class AgentApp:
         tune_tab = ttk.Frame(notebook, padding=10)
         log_tab = ttk.Frame(notebook, padding=10)
 
-        notebook.add(control_tab, text="Steuerung")
-        notebook.add(tune_tab, text="Idle Tuning")
-        notebook.add(log_tab, text="Log")
+        notebook.add(control_tab, text="Schnellsteuerung")
+        notebook.add(tune_tab, text="Verhalten & Display")
+        notebook.add(log_tab, text="Protokoll")
 
         self._build_control_tab(control_tab)
         self._build_tune_tab(tune_tab)
@@ -222,54 +221,61 @@ class AgentApp:
         self._refresh_emotion_options()
 
     def _build_control_tab(self, parent: ttk.Frame) -> None:
-        style = ttk.LabelFrame(parent, text="Eye Style", padding=10)
-        style.pack(fill=tk.X, pady=(0, 8))
-        self.style_combo = ttk.Combobox(style, textvariable=self.style_var, values=STYLES, state="readonly", width=18)
-        self.style_combo.pack(side=tk.LEFT)
-        self.style_combo.bind("<<ComboboxSelected>>", lambda _e: self._refresh_emotion_options())
-        ttk.Button(style, text="Style anwenden", command=self._on_set_style).pack(side=tk.LEFT, padx=8)
+        hint = ttk.Label(
+            parent,
+            text="Schnellzugriff fuer Emotionen, Display und Test-Ereignisse. Stil ist fest auf EVE gesetzt.",
+        )
+        hint.pack(anchor="w", pady=(0, 8))
 
-        emo = ttk.LabelFrame(parent, text="Emotion", padding=10)
-        emo.pack(fill=tk.X, pady=(0, 8))
-        self.emotion_combo = ttk.Combobox(emo, textvariable=self.emotion_var, state="readonly", width=14)
-        self.emotion_combo.pack(side=tk.LEFT)
-        ttk.Label(emo, text="Hold (ms)").pack(side=tk.LEFT, padx=(10, 4))
-        ttk.Entry(emo, textvariable=self.emotion_hold_var, width=8).pack(side=tk.LEFT)
-        ttk.Button(emo, text="Emotion senden", command=self._on_set_emotion).pack(side=tk.LEFT, padx=8)
+        look = ttk.LabelFrame(parent, text="Gesicht", padding=10)
+        look.pack(fill=tk.X, pady=(0, 8))
+        ttk.Label(look, text="Aktiver Stil: EVE").grid(row=0, column=0, sticky="w")
+        ttk.Label(look, text="Emotion:").grid(row=1, column=0, sticky="w", pady=(10, 0))
+        self.emotion_combo = ttk.Combobox(look, textvariable=self.emotion_var, state="readonly", width=18)
+        self.emotion_combo.grid(row=1, column=1, sticky="w", padx=(8, 0), pady=(10, 0))
+        ttk.Label(look, text="Anzeigedauer (ms):").grid(row=1, column=2, sticky="w", padx=(16, 0), pady=(10, 0))
+        ttk.Entry(look, textvariable=self.emotion_hold_var, width=10).grid(row=1, column=3, sticky="w", padx=(8, 0), pady=(10, 0))
+        ttk.Button(look, text="Jetzt zeigen", command=self._on_set_emotion).grid(row=1, column=4, sticky="w", padx=(12, 0), pady=(10, 0))
 
-        eyes = ttk.LabelFrame(parent, text="EVE Eyes (Left/Right)", padding=10)
+        eyes = ttk.LabelFrame(parent, text="Linkes / rechtes Auge", padding=10)
         eyes.pack(fill=tk.X, pady=(0, 8))
-        self.left_eye_combo = ttk.Combobox(eyes, textvariable=self.left_eye_var, state="readonly", width=12)
-        self.left_eye_combo.pack(side=tk.LEFT)
-        self.right_eye_combo = ttk.Combobox(eyes, textvariable=self.right_eye_var, state="readonly", width=12)
-        self.right_eye_combo.pack(side=tk.LEFT, padx=(6, 0))
-        ttk.Label(eyes, text="Hold (ms)").pack(side=tk.LEFT, padx=(10, 4))
-        ttk.Entry(eyes, textvariable=self.eye_hold_var, width=8).pack(side=tk.LEFT)
-        ttk.Button(eyes, text="Eye Pair setzen", command=self._on_set_eyes).pack(side=tk.LEFT, padx=8)
+        ttk.Label(eyes, text="Links:").grid(row=0, column=0, sticky="w")
+        self.left_eye_combo = ttk.Combobox(eyes, textvariable=self.left_eye_var, state="readonly", width=16)
+        self.left_eye_combo.grid(row=0, column=1, sticky="w", padx=(8, 0))
+        ttk.Label(eyes, text="Rechts:").grid(row=0, column=2, sticky="w", padx=(16, 0))
+        self.right_eye_combo = ttk.Combobox(eyes, textvariable=self.right_eye_var, state="readonly", width=16)
+        self.right_eye_combo.grid(row=0, column=3, sticky="w", padx=(8, 0))
+        ttk.Label(eyes, text="Anzeigedauer (ms):").grid(row=0, column=4, sticky="w", padx=(16, 0))
+        ttk.Entry(eyes, textvariable=self.eye_hold_var, width=10).grid(row=0, column=5, sticky="w", padx=(8, 0))
+        ttk.Button(eyes, text="Augenpaar setzen", command=self._on_set_eyes).grid(row=0, column=6, sticky="w", padx=(12, 0))
 
-        backlight = ttk.LabelFrame(parent, text="Backlight", padding=10)
-        backlight.pack(fill=tk.X, pady=(0, 8))
-        ttk.Scale(backlight, from_=0, to=100, variable=self.backlight_var, orient="horizontal").pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Label(backlight, textvariable=self.backlight_var, width=4).pack(side=tk.LEFT, padx=(8, 8))
-        ttk.Button(backlight, text="Helligkeit setzen", command=self._on_set_backlight).pack(side=tk.LEFT)
+        display = ttk.LabelFrame(parent, text="Display und Einblendungen", padding=10)
+        display.pack(fill=tk.X, pady=(0, 8))
+        ttk.Label(display, text="Helligkeit:").grid(row=0, column=0, sticky="w")
+        ttk.Scale(display, from_=0, to=100, variable=self.backlight_var, orient="horizontal").grid(row=0, column=1, sticky="ew", padx=(8, 8))
+        ttk.Label(display, textvariable=self.backlight_var, width=4).grid(row=0, column=2, sticky="w")
+        ttk.Button(display, text="Helligkeit senden", command=self._on_set_backlight).grid(row=0, column=3, sticky="w", padx=(8, 0))
+        ttk.Checkbutton(display, text="Technische Statuszeile unten anzeigen", variable=self.status_label_var).grid(row=1, column=0, columnspan=3, sticky="w", pady=(10, 0))
+        ttk.Button(display, text="Einblendung anwenden", command=self._on_set_status_label).grid(row=1, column=3, sticky="w", padx=(8, 0), pady=(10, 0))
+        display.grid_columnconfigure(1, weight=1)
 
-        debug = ttk.LabelFrame(parent, text="Debug", padding=10)
-        debug.pack(fill=tk.X, pady=(0, 8))
-        ttk.Checkbutton(debug, text="Show bottom status label", variable=self.status_label_var).pack(side=tk.LEFT)
-        ttk.Button(debug, text="Debug anwenden", command=self._on_set_status_label).pack(side=tk.LEFT, padx=8)
-
-        events = ttk.LabelFrame(parent, text="Events Simulator", padding=10)
+        events = ttk.LabelFrame(parent, text="Ereignisse testen", padding=10)
         events.pack(fill=tk.X, pady=(0, 8))
         for i, ev in enumerate(EVENTS):
-            ttk.Button(events, text=ev, command=lambda n=ev: self._send_event(n)).grid(row=i // 4, column=i % 4, padx=4, pady=4, sticky="ew")
+            ttk.Button(events, text=ev, command=lambda n=ev: self._send_event(n)).grid(
+                row=i // 4, column=i % 4, padx=4, pady=4, sticky="ew"
+            )
         for col in range(4):
             events.grid_columnconfigure(col, weight=1)
 
-        misc = ttk.LabelFrame(parent, text="BLE Extras", padding=10)
-        misc.pack(fill=tk.X)
-        ttk.Button(misc, text="Zeit jetzt syncen", command=self._on_time_sync).pack(side=tk.LEFT)
-        ttk.Entry(misc, textvariable=self.raw_cmd_var, width=36).pack(side=tk.LEFT, padx=(10, 6))
-        ttk.Button(misc, text="Raw CMD senden", command=self._on_raw_cmd).pack(side=tk.LEFT)
+        maintenance = ttk.LabelFrame(parent, text="Wartung", padding=10)
+        maintenance.pack(fill=tk.X)
+        ttk.Button(maintenance, text="Uhrzeit synchronisieren", command=self._on_time_sync).grid(row=0, column=0, sticky="w")
+        ttk.Button(maintenance, text="Werkseinstellungen", command=self._on_factory_reset).grid(row=0, column=1, sticky="w", padx=(8, 0))
+        ttk.Label(maintenance, text="Direktbefehl (nur fuer Tests):").grid(row=1, column=0, sticky="w", pady=(12, 0))
+        ttk.Entry(maintenance, textvariable=self.raw_cmd_var, width=42).grid(row=1, column=1, sticky="ew", padx=(8, 8), pady=(12, 0))
+        ttk.Button(maintenance, text="Direkt senden", command=self._on_raw_cmd).grid(row=1, column=2, sticky="w", pady=(12, 0))
+        maintenance.grid_columnconfigure(1, weight=1)
 
     def _style_emotions(self) -> list[str]:
         return list(BASE_EMOTIONS)
@@ -293,30 +299,40 @@ class AgentApp:
         canvas = tk.Canvas(outer, highlightthickness=0)
         scrollbar = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=scrollbar.set)
-
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        frame = ttk.LabelFrame(canvas, text="Idle Bewegung anpassen", padding=10)
+        frame = ttk.LabelFrame(canvas, text="Verhalten und Display", padding=10)
         canvas_window = canvas.create_window((0, 0), window=frame, anchor="nw")
 
         def _sync_scroll_region(_event=None) -> None:
             canvas.configure(scrollregion=canvas.bbox("all"))
             canvas.itemconfigure(canvas_window, width=canvas.winfo_width())
 
+        def _on_mousewheel(event) -> None:
+            if event.delta:
+                canvas.yview_scroll(int(-event.delta / 120), "units")
+
         frame.bind("<Configure>", _sync_scroll_region)
         canvas.bind("<Configure>", _sync_scroll_region)
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        ttk.Label(
+            frame,
+            text="Hier stellst du die Lebendigkeit der Augen, die Ruhezeiten und die Standardfarbe ein.",
+        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
 
         top_actions = ttk.Frame(frame)
-        top_actions.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
-        ttk.Button(top_actions, text="Werte anwenden", command=self._on_apply_tune).pack(side=tk.LEFT)
-        ttk.Button(top_actions, text="Augenfarbe anwenden", command=self._on_apply_eye_color).pack(side=tk.LEFT, padx=8)
-        ttk.Button(top_actions, text="Als Standard speichern", command=self._on_save_tune).pack(side=tk.LEFT, padx=8)
-        ttk.Button(top_actions, text="Gespeicherte Werte laden", command=self._on_load_tune).pack(side=tk.LEFT)
+        top_actions.grid(row=1, column=0, columnspan=2, sticky="w", pady=(0, 10))
+        ttk.Button(top_actions, text="Alle Werte senden", command=self._on_apply_tune).pack(side=tk.LEFT)
+        ttk.Button(top_actions, text="Nur Farbe senden", command=self._on_apply_eye_color).pack(side=tk.LEFT, padx=8)
+        ttk.Button(top_actions, text="Am Geraet speichern", command=self._on_save_tune).pack(side=tk.LEFT, padx=8)
+        ttk.Button(top_actions, text="Vom Geraet laden", command=self._on_load_tune).pack(side=tk.LEFT)
+        ttk.Button(top_actions, text="Werkseinstellungen", command=self._on_factory_reset).pack(side=tk.LEFT, padx=8)
 
         groups = [
             (
-                "Bewegung",
+                "Augenbewegung",
                 [
                     "drift_amp_px",
                     "saccade_amp_px",
@@ -327,7 +343,7 @@ class AgentApp:
                 ],
             ),
             (
-                "Blinken und Glow",
+                "Blinken und Leuchten",
                 [
                     "blink_interval_ms",
                     "blink_duration_ms",
@@ -337,7 +353,7 @@ class AgentApp:
                 ],
             ),
             (
-                "Screensaver und Display",
+                "Ruhezustand",
                 [
                     "sleep_delay_min",
                     "display_off_delay_min",
@@ -352,7 +368,7 @@ class AgentApp:
                 ],
             ),
             (
-                "Gyro",
+                "Bewegungssensor",
                 [
                     "gyro_tilt_xy_pct",
                     "gyro_tilt_z_pct",
@@ -362,30 +378,30 @@ class AgentApp:
         ]
 
         labels = {
-            "drift_amp_px": "Blickdrift Staerke (px)",
-            "saccade_amp_px": "Sakkaden Sprungweite (px)",
-            "saccade_min_ms": "Sakkaden min Intervall (ms)",
-            "saccade_max_ms": "Sakkaden max Intervall (ms)",
-            "blink_interval_ms": "Blink Intervall (ms)",
-            "blink_duration_ms": "Blink Dauer (ms)",
+            "drift_amp_px": "Leichte Augenbewegung (px)",
+            "saccade_amp_px": "Schnelle Blickspruenge (px)",
+            "saccade_min_ms": "Pause zwischen Blickspruengen min (ms)",
+            "saccade_max_ms": "Pause zwischen Blickspruengen max (ms)",
+            "blink_interval_ms": "Blink alle (ms)",
+            "blink_duration_ms": "Blinkdauer (ms)",
             "double_blink_chance_pct": "Doppelblink Chance (%)",
-            "glow_pulse_amp": "Glow Puls Staerke",
-            "glow_pulse_period_ms": "Glow Puls Periode (ms)",
-            "shake_amp_px": "Shake Amplitude (px)",
-            "shake_period_ms": "Shake Geschwindigkeit (ms)",
-            "sleep_delay_min": "Screensaver Start (Minuten)",
+            "glow_pulse_amp": "Leuchtpuls Staerke",
+            "glow_pulse_period_ms": "Leuchtpuls Tempo (ms)",
+            "shake_amp_px": "Shake Bewegung (px)",
+            "shake_period_ms": "Shake Tempo (ms)",
+            "sleep_delay_min": "Screensaver nach (Minuten)",
             "display_off_delay_min": "Display aus nach (Minuten)",
-            "eye_color_r": "Augenfarbe Rot (0-255)",
-            "eye_color_g": "Augenfarbe Gruen (0-255)",
-            "eye_color_b": "Augenfarbe Blau (0-255)",
-            "gyro_tilt_xy_pct": "Gyro Tilt XY Schwelle (%)",
-            "gyro_tilt_z_pct": "Gyro Tilt Z Schwelle (%)",
-            "gyro_tilt_cooldown_ms": "Gyro Tilt Cooldown (ms)",
+            "eye_color_r": "Rot (0-255)",
+            "eye_color_g": "Gruen (0-255)",
+            "eye_color_b": "Blau (0-255)",
+            "gyro_tilt_xy_pct": "Neigung XY Schwelle (%)",
+            "gyro_tilt_z_pct": "Neigung Z Schwelle (%)",
+            "gyro_tilt_cooldown_ms": "Neigungs-Sperre (ms)",
         }
 
         for idx, (title, keys) in enumerate(groups):
             group = ttk.LabelFrame(frame, text=title, padding=10)
-            group.grid(row=(idx // 2) + 1, column=idx % 2, sticky="nsew", padx=6, pady=6)
+            group.grid(row=(idx // 2) + 2, column=idx % 2, sticky="nsew", padx=6, pady=6)
             for row, key in enumerate(keys):
                 ttk.Label(group, text=labels.get(key, key)).grid(row=row, column=0, sticky="w", padx=(0, 8), pady=4)
                 ttk.Entry(group, textvariable=self.tune_vars[key], width=16).grid(row=row, column=1, sticky="w", pady=4)
@@ -393,7 +409,7 @@ class AgentApp:
             if title == "Augenfarbe":
                 color_row = ttk.Frame(group)
                 color_row.grid(row=len(keys), column=0, columnspan=2, sticky="w", pady=(8, 0))
-                ttk.Button(color_row, text="Augenfarbe waehlen", command=self._pick_eye_color).pack(side=tk.LEFT)
+                ttk.Button(color_row, text="Farbe waehlen", command=self._pick_eye_color).pack(side=tk.LEFT)
                 ttk.Entry(color_row, textvariable=self.eye_color_hex_var, width=10).pack(side=tk.LEFT, padx=(8, 0))
                 ttk.Button(color_row, text="EVE Cyan", command=lambda: self._apply_eye_color_preset("eve")).pack(side=tk.LEFT, padx=(12, 0))
                 ttk.Button(color_row, text="Ice Blue", command=lambda: self._apply_eye_color_preset("ice")).pack(side=tk.LEFT, padx=(8, 0))
@@ -403,16 +419,16 @@ class AgentApp:
         frame.columnconfigure(0, weight=1)
         frame.columnconfigure(1, weight=1)
 
-        presets = ttk.Frame(frame)
-        presets.grid(row=4, column=0, columnspan=2, sticky="w", pady=(8, 0))
-        ttk.Button(presets, text="Preset Ruhig", command=lambda: self._apply_tune_preset("calm")).pack(side=tk.LEFT)
-        ttk.Button(presets, text="Preset Standard", command=lambda: self._apply_tune_preset("balanced")).pack(side=tk.LEFT, padx=8)
-        ttk.Button(presets, text="Preset Lebhaft", command=lambda: self._apply_tune_preset("lively")).pack(side=tk.LEFT)
+        presets = ttk.LabelFrame(frame, text="Schnell-Presets", padding=10)
+        presets.grid(row=5, column=0, columnspan=2, sticky="w", padx=6, pady=(8, 0))
+        ttk.Button(presets, text="Ruhig", command=lambda: self._apply_tune_preset("calm")).pack(side=tk.LEFT)
+        ttk.Button(presets, text="Standard", command=lambda: self._apply_tune_preset("balanced")).pack(side=tk.LEFT, padx=8)
+        ttk.Button(presets, text="Lebhaft", command=lambda: self._apply_tune_preset("lively")).pack(side=tk.LEFT)
 
     def _build_log_tab(self, parent: ttk.Frame) -> None:
         self.log_text = tk.Text(parent, wrap="word", state="disabled")
         self.log_text.pack(fill=tk.BOTH, expand=True)
-        self._append_log("GUI bereit. Mit Start wird der Agent im Hintergrund gestartet.")
+        self._append_log("GUI bereit. Der Agent startet automatisch im Modus 'all'.")
 
     def _append_log(self, line: str) -> None:
         ts = datetime.now().strftime("%H:%M:%S")
@@ -438,7 +454,8 @@ class AgentApp:
             "stopping": "Stoppt",
             "stopped": "Gestoppt",
         }
-        return mapping.get(state, state), message
+        detail = (message or "").replace("DeskRobo", "MyDeskRobo")
+        return mapping.get(state, state), detail
 
     def _send(self, *cmd) -> bool:
         if not self.controller.is_running():
@@ -450,7 +467,7 @@ class AgentApp:
         return ok
 
     def _on_start(self) -> None:
-        mode = self.mode_var.get().strip() or "basic"
+        mode = self.mode_var.get().strip() or "all"
         if self.controller.start(mode):
             self._set_state("Startet", f"Modus: {mode}")
             self._append_log(f"Agent gestartet (Modus: {mode}).")
@@ -464,56 +481,61 @@ class AgentApp:
         self._append_log("Stop angefordert.")
         self._update_buttons()
 
-    def _on_set_style(self) -> None:
-        if self._send("style", self.style_var.get()):
-            self._append_log(f"Style gesendet: {self.style_var.get()}")
-
     def _on_set_emotion(self) -> None:
         try:
             hold = int(self.emotion_hold_var.get().strip())
         except ValueError:
-            self._append_log("Hold muss eine ganze Zahl sein.")
+            self._append_log("Die Anzeigedauer muss eine ganze Zahl sein.")
             return
         emo = self.emotion_var.get()
         if self._send("emotion", emo, hold):
-            self._append_log(f"Emotion gesendet: {emo} ({hold}ms)")
+            self._append_log(f"Emotion gesendet: {emo} ({hold} ms)")
 
     def _on_set_eyes(self) -> None:
         try:
             hold = int(self.eye_hold_var.get().strip())
         except ValueError:
-            self._append_log("Eye-Hold muss eine ganze Zahl sein.")
+            self._append_log("Die Anzeigedauer fuer das Augenpaar muss eine ganze Zahl sein.")
             return
         left = self.left_eye_var.get()
         right = self.right_eye_var.get()
         if self._send("eyes", left, right, hold):
-            self._append_log(f"Eye Pair gesendet: {left}/{right} ({hold}ms)")
+            self._append_log(f"Augenpaar gesendet: {left}/{right} ({hold} ms)")
 
     def _on_set_backlight(self) -> None:
         value = int(self.backlight_var.get())
         if self._send("backlight", value):
-            self._append_log(f"Backlight gesendet: {value}%")
+            self._append_log(f"Display-Helligkeit gesendet: {value}%")
 
     def _on_set_status_label(self) -> None:
         val = bool(self.status_label_var.get())
         if self._send("status_label", val):
-            self._append_log(f"Status-Label gesetzt: {'ON' if val else 'OFF'}")
+            self._append_log(f"Technische Statuszeile: {'AN' if val else 'AUS'}")
 
     def _send_event(self, name: str) -> None:
         if self._send("event", name):
-            self._append_log(f"Event gesendet: {name}")
+            self._append_log(f"Ereignis gesendet: {name}")
 
     def _on_time_sync(self) -> None:
         if self._send("time_sync"):
-            self._append_log("Zeit-Sync gesendet.")
+            self._append_log("Uhrzeit-Sync gesendet.")
+
+    def _on_factory_reset(self) -> None:
+        confirmed = messagebox.askyesno(
+            "Werkseinstellungen",
+            "Alle gespeicherten Werte auf dem Geraet loeschen und neu starten?",
+            parent=self.root,
+        )
+        if confirmed and self._send("factory_reset"):
+            self._append_log("Werkseinstellungen angefordert. Das Geraet startet neu.")
 
     def _on_raw_cmd(self) -> None:
         payload = self.raw_cmd_var.get().strip()
         if not payload:
-            self._append_log("Raw CMD ist leer.")
+            self._append_log("Direktbefehl ist leer.")
             return
         if self._send("cmd", payload):
-            self._append_log(f"Raw CMD gesendet: {payload}")
+            self._append_log(f"Direktbefehl gesendet: {payload}")
 
     def _apply_tune_preset(self, name: str) -> None:
         presets = {
@@ -521,28 +543,28 @@ class AgentApp:
                 "drift_amp_px": 1, "saccade_amp_px": 2, "saccade_min_ms": 2200, "saccade_max_ms": 5200,
                 "blink_interval_ms": 5200, "blink_duration_ms": 100, "double_blink_chance_pct": 8,
                 "glow_pulse_amp": 4, "glow_pulse_period_ms": 3200, "shake_amp_px": 14, "shake_period_ms": 900,
-                "sleep_delay_min": 15, "display_off_delay_min": 30,
+                "sleep_delay_min": 10, "display_off_delay_min": 15,
                 "gyro_tilt_xy_pct": 72, "gyro_tilt_z_pct": 74, "gyro_tilt_cooldown_ms": 2800,
             },
             "balanced": {
                 "drift_amp_px": 2, "saccade_amp_px": 3, "saccade_min_ms": 2600, "saccade_max_ms": 5200,
                 "blink_interval_ms": 3600, "blink_duration_ms": 120, "double_blink_chance_pct": 20,
                 "glow_pulse_amp": 6, "glow_pulse_period_ms": 2600, "shake_amp_px": 24, "shake_period_ms": 700,
-                "sleep_delay_min": 15, "display_off_delay_min": 30,
+                "sleep_delay_min": 10, "display_off_delay_min": 15,
                 "gyro_tilt_xy_pct": 62, "gyro_tilt_z_pct": 64, "gyro_tilt_cooldown_ms": 2200,
             },
             "lively": {
                 "drift_amp_px": 4, "saccade_amp_px": 8, "saccade_min_ms": 900, "saccade_max_ms": 2500,
                 "blink_interval_ms": 2800, "blink_duration_ms": 130, "double_blink_chance_pct": 30,
                 "glow_pulse_amp": 10, "glow_pulse_period_ms": 2000, "shake_amp_px": 32, "shake_period_ms": 520,
-                "sleep_delay_min": 15, "display_off_delay_min": 30,
+                "sleep_delay_min": 10, "display_off_delay_min": 15,
                 "gyro_tilt_xy_pct": 56, "gyro_tilt_z_pct": 58, "gyro_tilt_cooldown_ms": 1600,
             },
         }
-        p = presets.get(name)
-        if not p:
+        preset = presets.get(name)
+        if not preset:
             return
-        for key, value in p.items():
+        for key, value in preset.items():
             if key in self.tune_vars:
                 self.tune_vars[key].set(str(value))
         self._sync_eye_color_hex_from_rgb()
@@ -562,7 +584,7 @@ class AgentApp:
         if len(raw) != 7 or not raw.startswith("#"):
             return
         try:
-            rgb = [int(raw[i : i + 2], 16) for i in (1, 3, 5)]
+            rgb = [int(raw[i:i + 2], 16) for i in (1, 3, 5)]
         except ValueError:
             return
         self.tune_vars["eye_color_r"].set(str(rgb[0]))
@@ -621,15 +643,15 @@ class AgentApp:
                 continue
             if self._send("tune", key, val):
                 sent += 1
-        self._append_log(f"Tuning gesendet: {sent} Werte")
+        self._append_log(f"Werte gesendet: {sent}")
 
     def _on_save_tune(self) -> None:
         if self._send("tune_save"):
-            self._append_log("Tuning auf Device gespeichert.")
+            self._append_log("Aktuelle Werte auf dem Geraet gespeichert.")
 
     def _on_load_tune(self) -> None:
         if self._send("tune_load"):
-            self._append_log("Tuning vom Device geladen (aktive Werte wurden umgeschaltet).")
+            self._append_log("Gespeicherte Werte auf dem Geraet aktiviert.")
 
     def _update_buttons(self) -> None:
         running = self.controller.is_running()
@@ -646,7 +668,7 @@ class AgentApp:
             if kind == "status":
                 title, detail = self._friendly_status(state, message)
                 self._set_state(title, detail)
-                self._append_log(f"{title}: {message}" if message else title)
+                self._append_log(f"{title}: {detail}" if detail else title)
             elif kind == "error":
                 self._set_state("Fehler", message)
                 self._append_log(f"Fehler: {message}")
@@ -672,8 +694,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-
-
-

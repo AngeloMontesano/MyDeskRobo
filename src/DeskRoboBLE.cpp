@@ -4,6 +4,7 @@
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
+#include <Preferences.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <sys/time.h>
@@ -131,9 +132,16 @@ enum TuneKeyId : uint8_t {
   TUNE_KEY_DBL_BLINK_PCT = 7,
   TUNE_KEY_GLOW_AMP = 8,
   TUNE_KEY_GLOW_PERIOD = 9,
-  TUNE_KEY_GYRO_TILT_XY = 10,
-  TUNE_KEY_GYRO_TILT_Z = 11,
-  TUNE_KEY_GYRO_TILT_COOLDOWN = 12,
+  TUNE_KEY_SHAKE_AMP = 10,
+  TUNE_KEY_SHAKE_PERIOD = 11,
+  TUNE_KEY_SLEEP_DELAY = 12,
+  TUNE_KEY_DISPLAY_OFF_DELAY = 13,
+  TUNE_KEY_EYE_COLOR_R = 14,
+  TUNE_KEY_EYE_COLOR_G = 15,
+  TUNE_KEY_EYE_COLOR_B = 16,
+  TUNE_KEY_GYRO_TILT_XY = 17,
+  TUNE_KEY_GYRO_TILT_Z = 18,
+  TUNE_KEY_GYRO_TILT_COOLDOWN = 19,
 };
 
 bool parseBoolToken(const String &in, bool &out) {
@@ -166,6 +174,13 @@ bool parseTuneKeyId(const String &name, uint8_t &out) {
   else if (name == "DOUBLE_BLINK_CHANCE_PCT") out = TUNE_KEY_DBL_BLINK_PCT;
   else if (name == "GLOW_PULSE_AMP") out = TUNE_KEY_GLOW_AMP;
   else if (name == "GLOW_PULSE_PERIOD_MS") out = TUNE_KEY_GLOW_PERIOD;
+  else if (name == "SHAKE_AMP_PX") out = TUNE_KEY_SHAKE_AMP;
+  else if (name == "SHAKE_PERIOD_MS") out = TUNE_KEY_SHAKE_PERIOD;
+  else if (name == "SLEEP_DELAY_MIN") out = TUNE_KEY_SLEEP_DELAY;
+  else if (name == "DISPLAY_OFF_DELAY_MIN") out = TUNE_KEY_DISPLAY_OFF_DELAY;
+  else if (name == "EYE_COLOR_R") out = TUNE_KEY_EYE_COLOR_R;
+  else if (name == "EYE_COLOR_G") out = TUNE_KEY_EYE_COLOR_G;
+  else if (name == "EYE_COLOR_B") out = TUNE_KEY_EYE_COLOR_B;
   else if (name == "GYRO_TILT_XY_PCT") out = TUNE_KEY_GYRO_TILT_XY;
   else if (name == "GYRO_TILT_Z_PCT") out = TUNE_KEY_GYRO_TILT_Z;
   else if (name == "GYRO_TILT_COOLDOWN_MS") out = TUNE_KEY_GYRO_TILT_COOLDOWN;
@@ -193,6 +208,20 @@ const char *tuneKeyName(uint8_t key_id) {
       return "glow_pulse_amp";
     case TUNE_KEY_GLOW_PERIOD:
       return "glow_pulse_period_ms";
+    case TUNE_KEY_SHAKE_AMP:
+      return "shake_amp_px";
+    case TUNE_KEY_SHAKE_PERIOD:
+      return "shake_period_ms";
+    case TUNE_KEY_SLEEP_DELAY:
+      return "sleep_delay_min";
+    case TUNE_KEY_DISPLAY_OFF_DELAY:
+      return "display_off_delay_min";
+    case TUNE_KEY_EYE_COLOR_R:
+      return "eye_color_r";
+    case TUNE_KEY_EYE_COLOR_G:
+      return "eye_color_g";
+    case TUNE_KEY_EYE_COLOR_B:
+      return "eye_color_b";
     case TUNE_KEY_GYRO_TILT_XY:
       return "gyro_tilt_xy_pct";
     case TUNE_KEY_GYRO_TILT_Z:
@@ -371,6 +400,8 @@ void handleTextCommand(String cmd) {
       ok = enqueueCmd({CMD_SAVE_TUNING, 0, 0, 0});
     } else if (action == "TUNE_LOAD") {
       ok = enqueueCmd({CMD_LOAD_TUNING, 0, 0, 0});
+    } else if (action == "FACTORY_RESET") {
+      ok = enqueueCmd({CMD_FACTORY_RESET, 0, 0, 0});
     } else if (action == "EVENT") {
       DeskRoboEventType ev;
       if (parseEvent(payload, ev)) {
@@ -542,7 +573,7 @@ void DeskRoboBLE_Loop() {
         DeskRobo_SetStatusLabelVisible(cmd.a != 0);
         break;
       case CMD_SET_BACKLIGHT:
-        Set_Backlight((uint8_t)constrain((int)cmd.a, 0, 100));
+        DeskRobo_SetBacklightLevel((uint8_t)constrain((int)cmd.a, 0, 100));
         break;
       case CMD_SET_TUNING: {
         const char *key = tuneKeyName(cmd.a);
@@ -557,6 +588,15 @@ void DeskRoboBLE_Loop() {
       case CMD_LOAD_TUNING:
         (void)DeskRobo_LoadTuning();
         break;
+      case CMD_FACTORY_RESET: {
+        Preferences prefs;
+        if (prefs.begin("deskrobo", false)) {
+          prefs.clear();
+          prefs.end();
+        }
+        ESP.restart();
+        break;
+      }
       default:
         break;
     }

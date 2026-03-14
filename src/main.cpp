@@ -20,6 +20,64 @@
 #endif
 
 static volatile bool g_ble_ready = false;
+static uint32_t g_last_motion_poll_ms = 0;
+static uint32_t g_last_shake_event_ms = 0;
+static uint32_t g_motion_boot_grace_until_ms = 0;
+static uint8_t g_shake_hits = 0;
+static bool g_motion_seeded = false;
+static float g_prev_ax = 0.0f;
+static float g_prev_ay = 0.0f;
+static float g_prev_az = 1.0f;
+
+static void GyroMotionLoop() {
+#if DESKROBO_ENABLE_GYRO
+  if (!QMI8658_IsReady()) return;
+  const uint32_t now = millis();
+  if (now < g_motion_boot_grace_until_ms) return;
+  if ((now - g_last_motion_poll_ms) < 40U) return;
+  g_last_motion_poll_ms = now;
+
+  QMI8658_Loop();
+  getGyroscope();
+
+  const float ax = Accel.x;
+  const float ay = Accel.y;
+  const float az = Accel.z;
+  const float gx = Gyro.x;
+  const float gy = Gyro.y;
+  const float gz = Gyro.z;
+  if (isnan(ax) || isnan(ay) || isnan(az) || isnan(gx) || isnan(gy) || isnan(gz)) return;
+
+  if (!g_motion_seeded) {
+    g_prev_ax = ax;
+    g_prev_ay = ay;
+    g_prev_az = az;
+    g_motion_seeded = true;
+    return;
+  }
+
+  const float delta = fabsf(ax - g_prev_ax) + fabsf(ay - g_prev_ay) + fabsf(az - g_prev_az);
+  const float gyro_sum = fabsf(gx) + fabsf(gy) + fabsf(gz);
+  const bool shake_sample = (delta > 1.10f) || (gyro_sum > 42.0f);
+
+  g_prev_ax = ax;
+  g_prev_ay = ay;
+  g_prev_az = az;
+
+  if (shake_sample) {
+    if (g_shake_hits < 3) g_shake_hits++;
+  } else {
+    g_shake_hits = 0;
+  }
+
+  if (g_shake_hits >= 2 && (now - g_last_shake_event_ms) > 2600U) {
+    g_last_shake_event_ms = now;
+    g_shake_hits = 0;
+    DeskRobo_PushEvent(DESKROBO_EVENT_MOTION_SHAKE);
+    Serial.printf("[GYRO] SHAKE ax=%.2f ay=%.2f az=%.2f gx=%.2f gy=%.2f gz=%.2f\n", ax, ay, az, gx, gy, gz);
+  }
+#endif
+}
 static volatile bool g_ble_init_requested = false;
 
 static void BleInitTask(void *param) {
@@ -91,6 +149,7 @@ void setup() {
 #endif
 #if DESKROBO_ENABLE_GYRO
   QMI8658_Init();
+  g_motion_boot_grace_until_ms = millis() + 6000U;
   Serial.println("[BOOT] Gyro init done");
 #else
   Serial.println("[BOOT] Gyro init skipped");
@@ -115,6 +174,9 @@ void loop() {
   if (g_ble_ready) {
     DeskRoboBLE_Loop();
   }
+  GyroMotionLoop();
   Lvgl_Loop();
   vTaskDelay(pdMS_TO_TICKS(5));
 }
+
+

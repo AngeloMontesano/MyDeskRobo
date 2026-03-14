@@ -16,7 +16,7 @@ class Dispatcher:
         await asyncio.sleep(delay_s)
         self.current_emotion = Emotion.IDLE
         self.current_priority = 0
-        await self.ble.send_emotion(Emotion.IDLE)
+        await self.ble.set_emotion_named("IDLE", 1500)
 
     async def handle(self, event: RoboEvent):
         if event.priority < self.current_priority:

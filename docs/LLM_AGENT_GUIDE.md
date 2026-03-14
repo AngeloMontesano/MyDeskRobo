@@ -1,55 +1,53 @@
 # MyDeskRobo LLM Agent Guide
 
-The public release target is the MyDeskRoboEngine-based EVE runtime.
-
 ## 1. Primary Goal
 
 Keep `esp32-s3-mydeskrobo-full` stable.
 Do not regress:
 - display bring-up
-- LVGL main-loop ownership
-- BLE queue handoff
-- web frontend control path
+- BLE command handoff
+- canvas-based face rendering
+- PC-agent compatibility
 
-## 2. Critical Invariants
+## 2. Current Public Runtime
 
-- LVGL work stays in main loop context.
-- BLE callbacks only enqueue commands.
-- Eye rendering goes through the canvas renderer, not ad-hoc rotated LVGL object tricks.
-- Public runtime is EVE-only unless the user explicitly requests reopening style families.
+Active release path:
+- `esp32-s3-mydeskrobo-full`
+- `MyDeskRoboEngine`
+- BLE-only control in normal use
+- no active web frontend in the release workflow
 
-## 3. Main Files
+## 3. Critical Invariants
 
-- Runtime state / API bridge:
-  - `src/DeskRoboMVP.h`
-  - `src/DeskRoboMVP_nextgen.cpp`
-- Web API + embedded frontend:
-  - `src/DeskRoboWeb.cpp`
-- BLE control path:
-  - `src/DeskRoboBLE.cpp`
-- Scene engine:
-  - `MyDeskRoboEngine/include/SceneSpec.h`
-  - `MyDeskRoboEngine/include/LayerRenderer.h`
-  - `MyDeskRoboEngine/src/LayerRenderer.cpp`
-- Scene assets:
-  - `MyDeskRoboEngine/include/scenes/*.h`
-- Eye editor docs:
-  - `docs/eye_designer/*`
-- PC agent:
-  - `pc_agent/*`
+- LVGL work stays in the main loop.
+- BLE callbacks enqueue commands only.
+- Face rendering goes through the canvas renderer.
+- Public runtime is EVE-only.
+- If a change affects Python control code, run `py_compile`.
 
-## 4. Safe Change Procedure
+## 4. Main Files
 
-1. Search first.
-2. Touch the minimum number of files.
-3. Build the exact target you changed.
-4. If Python GUI/agent code changed, run `py_compile`.
-5. Report concrete file changes and residual risk.
+Runtime:
+- `src/DeskRoboMVP.h`
+- `src/DeskRoboMVP_nextgen.cpp`
+- `src/main.cpp`
+- `src/DeskRoboBLE.cpp`
+
+Renderer:
+- `MyDeskRoboEngine/include/SceneSpec.h`
+- `MyDeskRoboEngine/include/LayerRenderer.h`
+- `MyDeskRoboEngine/src/LayerRenderer.cpp`
+- `MyDeskRoboEngine/include/scenes/*.h`
+
+PC control:
+- `pc_agent/agent_gui.py`
+- `pc_agent/pc_agent.py`
+- `pc_agent/ble_client.py`
+- `pc_agent/dispatch.py`
 
 ## 5. Required Validation
 
 Firmware build:
-
 ```powershell
 $env:PYTHONIOENCODING='utf-8'
 $env:PYTHONUTF8='1'
@@ -57,62 +55,27 @@ chcp 65001 > $null
 & "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run -e esp32-s3-mydeskrobo-full
 ```
 
-Firmware upload:
-
-```powershell
-$env:PYTHONIOENCODING='utf-8'
-$env:PYTHONUTF8='1'
-chcp 65001 > $null
-& "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run -e esp32-s3-mydeskrobo-full -t upload
-```
-
 Python check:
-
 ```powershell
-python -m py_compile pc_agent\pc_agent.py pc_agent\agent_gui.py pc_agent\ble_client.py
+python -m py_compile pc_agent\pc_agent.py pc_agent\agent_gui.py pc_agent\ble_client.py pc_agent\dispatch.py
 ```
 
-## 6. API Summary
+## 6. Common Failure Modes
 
-- `POST /api/emotion?name=<EMOTION>&hold=<ms>`
-- `POST /api/eyes?left=<EMOTION>&right=<EMOTION>&hold=<ms>`
-- `POST /api/style?name=EVE`
-- `POST /api/backlight?value=0..100`
-- `POST /api/tune/set?key=<k>&value=<v>`
-- `POST /api/event?name=CALL|MAIL|TEAMS|LOUD|VERY_LOUD|QUIET|TILT|SHAKE`
-- `POST /api/ota`
+- `IDLE` looks wrong but manual emotions work:
+  - inspect the reset/default path first
+  - especially agent-triggered IDLE or boot transition logic
+- face differs from editor intent:
+  - inspect canvas renderer and scene data first
+  - do not reintroduce rotated LVGL object layering
+- tuning command appears ignored:
+  - inspect `DeskRoboBLE.cpp` tune-key parser first
+- strange post-update behavior:
+  - check persisted values in namespace `deskrobo`
 
-## 7. Common Failure Modes
+## 7. Scope Discipline
 
-- Eyes render unlike the editor:
-  - inspect the canvas renderer first
-  - do not reintroduce rotated LVGL object layering for `cut`/`brow`
-- BLE says sent but nothing changes:
-  - inspect `DeskRoboBLE.cpp` queueing and `DeskRoboMVP_nextgen.cpp`
-- Web UI shows stale options:
-  - check embedded HTML/JS in `DeskRoboWeb.cpp`
-- GUI and firmware diverge:
-  - align `pc_agent/agent_gui.py` with the public API, not just scene-demo assets
-
-## 8. Persistence Rules
-
-Preferences namespace: `deskrobo`
-
-If new persistent settings are added:
-- save in `DeskRobo_SaveTuning()`
-- load in `DeskRobo_LoadTuning()` / `load_prefs_values()`
-- keep backward-compatible defaults
-
-## 9. Scope Discipline
-
-- Do not silently widen styles again.
-- Keep scene authoring inside `MyDeskRoboEngine`; do not reintroduce the removed legacy renderer path.
-- Prefer scene/data changes over hardcoded emotion-specific drawing hacks.
-
-## 10. Handoff Format
-
-Report:
-1. modified files
-2. behavior changes
-3. validation run
-4. residual risks
+- Do not silently reintroduce web as the primary control path.
+- Do not widen styles again unless explicitly requested.
+- Prefer scene/data changes over ad-hoc rendering hacks.
+- Keep release docs aligned with actual runtime behavior.

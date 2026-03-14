@@ -63,6 +63,8 @@ async def control_loop(control_queue: asyncio.Queue, ble: BleClient):
                 await ble.save_tuning()
             elif name == "tune_load":
                 await ble.load_tuning()
+            elif name == "factory_reset":
+                await ble.factory_reset()
             elif name == "cmd" and len(cmd) == 2:
                 await ble.send_command_payload(str(cmd[1]))
         except Exception:
@@ -122,7 +124,7 @@ async def run(
 
         # Graceful shutdown: send IDLE then disconnect.
         if ble.is_connected:
-            await ble.send_emotion(Emotion.IDLE)
+            await ble.set_emotion_named("IDLE", 1500)
         await ble.disconnect()
         _emit_status(status_callback, "stopped", "Agent gestoppt")
 

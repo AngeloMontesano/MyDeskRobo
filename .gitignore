@@ -22,6 +22,7 @@ compile_commands.json
 !.vscode/extensions.json
 !.vscode/tasks.json
 /.claude/
+/.vscode/
 
 # C/C++ extension temp files
 .vscode/.browse.c_cpp.db*

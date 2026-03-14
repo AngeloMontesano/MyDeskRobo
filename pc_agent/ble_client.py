@@ -305,6 +305,9 @@ class BleClient:
     async def load_tuning(self) -> bool:
         return await self.send_command_payload("TUNE_LOAD:1")
 
+    async def factory_reset(self) -> bool:
+        return await self.send_command_payload("FACTORY_RESET:1")
+
     async def send_emotion(self, emotion: int) -> bool:
         emotion = int(emotion) & 0xFF
 

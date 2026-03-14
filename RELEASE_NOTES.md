@@ -1,40 +1,36 @@
 # Release Notes
 
-## Current Public Release
+## MyDeskRobo v0.5
 
-Project name:
-- `MyDeskRobo`
-
-Main firmware target:
+Current firmware target:
 - `esp32-s3-mydeskrobo-full`
 
-Renderer:
-- `MyDeskRoboEngine`
-- EVE-only scene pipeline
-- canvas-based eye rendering for accurate `cut` and `brow` layers
+Current branding:
+- boot splash: `My Robo Desk`
+- version shown on boot: `v0.5`
 
-## Included Features
+## Included in This Release
 
-- Web frontend over Wi-Fi AP (`MyDeskRobo-Setup`)
+- `MyDeskRoboEngine` scene renderer
+- EVE-only face pipeline
 - BLE control path
 - Windows PC agent and GUI
-- OTA upload from the browser
-- Backlight control
-- Idle tuning and persistence
-- Sleep / display-off timing
-- Runtime eye color tuning
-- EVE emotions including `WINK`, `XX`, `GLITCH`
+- runtime eye tuning
+- eye color tuning
+- sleep/screensaver timing
+- local gyro-based shake trigger
+- special emotions `WINK`, `XX`, `GLITCH`
 
-## Removed During Release Cleanup
+## Not Included in This Release
 
-- legacy `anime_face` renderer path
-- old `DeskRoboMVP.cpp` runtime path
-- old multi-style families (`FLUX`, `ANGRY`, `SAD`)
-- old `ANGRY_1..10` / `SAD_1..10` public variants
-- demo target and demo-only files
-- temporary preview / roboeyes experiment files
+- Wi-Fi setup flow
+- web frontend
+- OTA over browser
+- legacy `anime_face` renderer
+- old style families like `FLUX`
+- old public `ANGRY_1..10` / `SAD_1..10` variants
 
-## Build Validation
+## Validation
 
 Firmware:
 ```powershell
@@ -49,8 +45,18 @@ Python:
 python -m py_compile pc_agent\pc_agent.py pc_agent\agent_gui.py pc_agent\ble_client.py
 ```
 
-## Before Publishing
+## Release Notes for Users
 
+Before flashing:
+- verify the COM port in `platformio.ini`
+- optionally erase flash first if you want a clean start
+
+After flashing:
+- the face should appear after the boot splash
+- BLE should be available as `MyDeskRobo`
+- the PC GUI should connect and control the device without Wi-Fi
+
+## Before Public Publishing
+
+Still recommended:
 - add a real `LICENSE` file
-- optionally rename the outer repo folder itself to `MyDeskRobo`
-- commit the rename/delete set as one coherent cleanup change

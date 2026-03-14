@@ -1,83 +1,81 @@
-# MyDeskRobo (Waveshare ESP32-S3-LCD-1.85)
+# MyDeskRobo
 
-MyDeskRobo is an ESP32 desk companion with an animated LVGL face, controllable over Web API and BLE.
+MyDeskRobo is an ESP32-S3 desk companion for the Waveshare ESP32-S3-LCD-1.85.
+The current public release uses the new `MyDeskRoboEngine` renderer, BLE control and the Windows PC agent GUI.
 
-This repository contains:
-- firmware (`src/*`) for the board
-- Windows companion agent (`pc_agent/*`) for BLE event forwarding
+## Current Release Scope
 
-## Features
+Included:
+- firmware target `esp32-s3-mydeskrobo-full`
+- EVE-based face pipeline
+- BLE control path
+- Windows PC agent and GUI
+- boot splash: `My Robo Desk v0.5`
+- runtime tuning for eye motion, eye color, sleep and display-off timing
+- local shake detection via gyro
 
-- 360x360 display (ST77916) with animated eye face
-- core emotions plus `WINK`, `XX`, `GLITCH` and temporary eye pair override
-- EVE-only face pipeline with web, BLE and PC agent control
-- web control UI in AP mode (`MyDeskRobo-Setup`)
-- HTTP API for emotions, events, style, backlight, tuning
-- OTA firmware upload via browser (`/api/ota`)
-- BLE command path (for PC agent)
-- backlight control from web UI (`0..100`)
 
-## Connectivity Policy
+## Supported Emotions
 
-- On boot, MyDeskRobo waits up to 60 seconds for STA WLAN connection.
-- If WLAN connects within 60s: BLE starts and Wi-Fi stays active.
-- If WLAN does not connect within 60s: Wi-Fi (AP+STA) is turned off and BLE starts.
-- AP auto-off is still active: AP is disabled after 9 minutes when no AP clients are connected.
+- `IDLE`
+- `HAPPY`
+- `SAD`
+- `ANGRY`
+- `ANGRY_SOFT`
+- `ANGRY_HARD`
+- `WOW`
+- `SLEEPY`
+- `CONFUSED`
+- `SHAKE`
+- `WINK`
+- `XX`
+- `GLITCH`
+- `MAIL`
+- `CALL`
 
-## Hardware / Software Baseline
+## For Users
 
-- Board: Waveshare ESP32-S3-LCD-1.85
-- Framework: Arduino (PlatformIO)
-- Current upload/monitor port in this repo: `COM5`
-- OS used for development: Windows
+Start here:
+- [MYDESKROBO_QUICKSTART.md](MYDESKROBO_QUICKSTART.md)
 
-## Quick Start
+That document explains:
+- what hardware you need
+- how to install PlatformIO
+- how to set the COM port
+- how to erase old settings
+- how to flash the firmware
+- how to start the PC agent GUI
 
-1. Build + upload:
+## Repository Layout
 
+- `src/` firmware entry points and runtime bridge
+- `MyDeskRoboEngine/` face renderer and scene definitions
+- `pc_agent/` Windows BLE agent and GUI
+- `docs/` technical and maintenance documentation
+
+## Validation
+
+Firmware build:
 ```powershell
 $env:PYTHONIOENCODING='utf-8'
 $env:PYTHONUTF8='1'
 chcp 65001 > $null
-& "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run -e esp32-s3-mydeskrobo-full -t upload
+& "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run -e esp32-s3-mydeskrobo-full
 ```
 
-2. Connect to AP (within the first 60s after boot if no STA WLAN is connected):
-- SSID: `MyDeskRobo-Setup`
-- Password: `deskrobo123`
-
-3. Open:
-- `http://192.168.4.1/`
-
-Note: if Wi-Fi timed out and was turned off, reboot MyDeskRobo to reopen the setup AP window.
-
-## Main API Endpoints
-
-- `GET /api/status`
-- `POST /api/emotion?name=HAPPY&hold=3500`
-- `POST /api/eyes?left=IDLE&right=WINK&hold=5000`
-- `POST /api/style?name=EVE`
-- `GET /api/backlight`
-- `POST /api/backlight?value=65`
-- `GET /api/tune/get`
-- `POST /api/tune/set?key=blink_interval_ms&value=3200`
-- `POST /api/tune/save`
-- `POST /api/tune/load`
-- `POST /api/event?name=CALL`
-- `POST /api/ota`
+Python check:
+```powershell
+python -m py_compile pc_agent\pc_agent.py pc_agent\agent_gui.py pc_agent\ble_client.py
+```
 
 ## Documentation
 
-- User/developer quickstart: [MYDESKROBO_QUICKSTART.md](MYDESKROBO_QUICKSTART.md)
-- Technical documentation: [docs/TECHNICAL_DOC.md](docs/TECHNICAL_DOC.md)
-- LLM/Agent implementation guide: [docs/LLM_AGENT_GUIDE.md](docs/LLM_AGENT_GUIDE.md)
-- PC agent details: [pc_agent/README.md](pc_agent/README.md)
-
-## Known Constraints
-
-- Gyro runtime events are disabled by default for stability (`DESKROBO_ENABLE_GYRO`, `DESKROBO_GYRO_EVENTS` commented in `platformio.ini`).
-- Some LVGL compile warnings from upstream headers are expected and currently non-blocking.
+- [MYDESKROBO_QUICKSTART.md](MYDESKROBO_QUICKSTART.md)
+- [docs/TECHNICAL_DOC.md](docs/TECHNICAL_DOC.md)
+- [docs/LLM_AGENT_GUIDE.md](docs/LLM_AGENT_GUIDE.md)
+- [pc_agent/README.md](pc_agent/README.md)
+- [RELEASE_NOTES.md](RELEASE_NOTES.md)
 
 ## License
 
-Add a `LICENSE` file before public release.
+Add a `LICENSE` file before publishing publicly.
