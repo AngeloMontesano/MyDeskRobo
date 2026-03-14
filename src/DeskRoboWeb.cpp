@@ -20,11 +20,11 @@ bool g_ap_is_on = false;
 uint32_t g_ap_start_ms = 0;
 bool g_wifi_disabled = false;
 
-const char *kApSsid = "DeskRobo-Setup";
+const char *kApSsid = "MyDeskRobo-Setup";
 
 const char kIndexHtml[] PROGMEM = R"HTML(
 <!doctype html><html><head><meta name=viewport content="width=device-width,initial-scale=1">
-<title>DeskRobo Control</title>
+<title>MyDeskRobo Control</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
 body{margin:0;background:linear-gradient(135deg,#0a0d14 0%,#151a28 100%);color:#e2ecff;font-family:'Inter',sans-serif;min-height:100vh}
@@ -43,11 +43,11 @@ input[type=number],input[type=text],input[type=password]{width:100%;box-sizing:b
 small{opacity:0.6;font-size:0.8rem;display:block;margin-top:8px}
 .status-badge{display:inline-block;padding:5px 10px;border-radius:20px;background:rgba(0,210,255,0.1);color:#00d2ff;font-size:0.85rem;font-weight:600}
 </style></head><body><div class=wrap>
-<div class=header><h1>DeskRobo</h1><p>Robot Configuration Console</p></div>
+<div class=header><h1>MyDeskRobo</h1><p>Robot Configuration Console</p></div>
 <div class=card>
 <div style="display:flex;justify-content:space-between;align-items:center">
 <div><span class=status-badge id=state>Connecting...</span></div>
-<small style="margin:0">AP: DeskRobo-Setup</small>
+<small style="margin:0">AP: MyDeskRobo-Setup</small>
 </div>
 </div>
 <div class=card><h3>Emotion</h3><div class=grid id=emo></div></div>
@@ -56,7 +56,7 @@ small{opacity:0.6;font-size:0.8rem;display:block;margin-top:8px}
 <select id=styleSel></select>
 <button onclick="applyStyle()">Style anwenden</button>
 </div>
-<small>Unter ANGRY und SAD waehle dann die passenden Varianten ueber die Emotionen.</small>
+<small>Aktuell ist nur der EVE Stil aktiv.</small>
 </div>
 <div class=card><h3>Backlight</h3>
 <div style="display:flex;align-items:center;gap:15px">
@@ -102,7 +102,7 @@ small{opacity:0.6;font-size:0.8rem;display:block;margin-top:8px}
 <span>Show bottom status label</span>
 <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
 <input id=dbgStatusLabel type=checkbox>
-<span>DeskRobo: ...</span>
+<span>MyDeskRobo: ...</span>
 </label>
 </div>
 </div>
@@ -146,22 +146,15 @@ small{opacity:0.6;font-size:0.8rem;display:block;margin-top:8px}
 </div>
 </div>
 <script>
-const baseEmos=['IDLE','HAPPY','SAD','ANGRY','WOW','SLEEPY','CONFUSED','EXCITED','DIZZY','MAIL','CALL','SHAKE'];
-const angryEmos=Array.from({length:10},(_,i)=>`ANGRY_${i+1}`);
-const sadEmos=Array.from({length:10},(_,i)=>`SAD_${i+1}`);
-const styles=['EVE','FLUX','ANGRY','SAD'];
+const baseEmos=['IDLE','HAPPY','SAD','ANGRY','WOW','SLEEPY','CONFUSED','MAIL','CALL','SHAKE','WINK','XX','GLITCH'];
+const styles=['EVE'];
 const box=document.getElementById('emo');
 const leftSel=document.getElementById('leftEye');
 const rightSel=document.getElementById('rightEye');
 const styleSel=document.getElementById('styleSel');
 const dbgStatusLabel=document.getElementById('dbgStatusLabel');
-function currentStyleEmos(){
-  if(styleSel.value==='ANGRY') return angryEmos;
-  if(styleSel.value==='SAD') return sadEmos;
-  return baseEmos;
-}
 function rebuildEmotionUi(){
-  const emos=currentStyleEmos();
+  const emos=baseEmos;
   box.innerHTML='';
   leftSel.innerHTML='';
   rightSel.innerHTML='';
@@ -295,19 +288,25 @@ bool parseEmotion(const String &name, DeskRoboEmotion &out) {
     out = DESKROBO_EMOTION_CONFUSED;
   else if (name == "EXCITED")
     out = DESKROBO_EMOTION_EXCITED;
-  else if (name.startsWith("ANGRY_")) {
-    const int idx = name.substring(6).toInt();
-    if (idx >= 1 && idx <= 10)
-      out = (DeskRoboEmotion)((int)DESKROBO_EMOTION_ANGRY_1 + (idx - 1));
-    else
-      return false;
-  } else if (name.startsWith("SAD_")) {
-    const int idx = name.substring(4).toInt();
-    if (idx >= 1 && idx <= 10)
-      out = (DeskRoboEmotion)((int)DESKROBO_EMOTION_SAD_1 + (idx - 1));
-    else
-      return false;
-  } else
+  else if (name == "DIZZY")
+    out = DESKROBO_EMOTION_DIZZY;
+  else if (name == "MAIL")
+    out = DESKROBO_EMOTION_MAIL;
+  else if (name == "CALL")
+    out = DESKROBO_EMOTION_CALL;
+  else if (name == "SHAKE")
+    out = DESKROBO_EMOTION_SHAKE;
+  else if (name == "WINK")
+    out = DESKROBO_EMOTION_WINK;
+  else if (name == "XX")
+    out = DESKROBO_EMOTION_XX;
+  else if (name == "GLITCH")
+    out = DESKROBO_EMOTION_GLITCH;
+  else if (name.startsWith("ANGRY_"))
+    out = DESKROBO_EMOTION_ANGRY;
+  else if (name.startsWith("SAD_"))
+    out = DESKROBO_EMOTION_SAD;
+  else
     return false;
   return true;
 }
@@ -350,34 +349,20 @@ const char *emotionToName(DeskRoboEmotion e) {
     return "CONFUSED";
   case DESKROBO_EMOTION_EXCITED:
     return "EXCITED";
-  case DESKROBO_EMOTION_ANGRY_1:
-  case DESKROBO_EMOTION_ANGRY_2:
-  case DESKROBO_EMOTION_ANGRY_3:
-  case DESKROBO_EMOTION_ANGRY_4:
-  case DESKROBO_EMOTION_ANGRY_5:
-  case DESKROBO_EMOTION_ANGRY_6:
-  case DESKROBO_EMOTION_ANGRY_7:
-  case DESKROBO_EMOTION_ANGRY_8:
-  case DESKROBO_EMOTION_ANGRY_9:
-  case DESKROBO_EMOTION_ANGRY_10: {
-    static char angry_buf[16];
-    snprintf(angry_buf, sizeof(angry_buf), "ANGRY_%d", (int)e - (int)DESKROBO_EMOTION_ANGRY_1 + 1);
-    return angry_buf;
-  }
-  case DESKROBO_EMOTION_SAD_1:
-  case DESKROBO_EMOTION_SAD_2:
-  case DESKROBO_EMOTION_SAD_3:
-  case DESKROBO_EMOTION_SAD_4:
-  case DESKROBO_EMOTION_SAD_5:
-  case DESKROBO_EMOTION_SAD_6:
-  case DESKROBO_EMOTION_SAD_7:
-  case DESKROBO_EMOTION_SAD_8:
-  case DESKROBO_EMOTION_SAD_9:
-  case DESKROBO_EMOTION_SAD_10: {
-    static char sad_buf[16];
-    snprintf(sad_buf, sizeof(sad_buf), "SAD_%d", (int)e - (int)DESKROBO_EMOTION_SAD_1 + 1);
-    return sad_buf;
-  }
+  case DESKROBO_EMOTION_DIZZY:
+    return "DIZZY";
+  case DESKROBO_EMOTION_MAIL:
+    return "MAIL";
+  case DESKROBO_EMOTION_CALL:
+    return "CALL";
+  case DESKROBO_EMOTION_SHAKE:
+    return "SHAKE";
+  case DESKROBO_EMOTION_WINK:
+    return "WINK";
+  case DESKROBO_EMOTION_XX:
+    return "XX";
+  case DESKROBO_EMOTION_GLITCH:
+    return "GLITCH";
   case DESKROBO_EMOTION_IDLE:
   default:
     return "IDLE";

@@ -16,18 +16,16 @@ BASE_EMOTIONS = [
     "WOW",
     "SLEEPY",
     "CONFUSED",
-    "EXCITED",
-    "DIZZY",
     "MAIL",
     "CALL",
     "SHAKE",
+    "WINK",
+    "XX",
+    "GLITCH",
 ]
-ANGRY_EMOTIONS = [f"ANGRY_{i}" for i in range(1, 11)]
-SAD_EMOTIONS = [f"SAD_{i}" for i in range(1, 11)]
-
 EVENTS = ["CALL", "MAIL", "TEAMS", "LOUD", "VERY_LOUD", "TILT", "SHAKE", "QUIET"]
 
-STYLES = ["EVE", "FLUX", "ANGRY", "SAD"]
+STYLES = ["EVE"]
 
 TUNE_KEYS = [
     "drift_amp_px",
@@ -152,7 +150,7 @@ class AgentController:
 class AgentApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("DeskRobo PC Agent")
+        self.root.title("MyDeskRobo PC Agent")
         self.root.geometry("980x760")
         self.root.minsize(900, 700)
 
@@ -274,11 +272,6 @@ class AgentApp:
         ttk.Button(misc, text="Raw CMD senden", command=self._on_raw_cmd).pack(side=tk.LEFT)
 
     def _style_emotions(self) -> list[str]:
-        style = self.style_var.get().strip()
-        if style == "ANGRY":
-            return list(ANGRY_EMOTIONS)
-        if style == "SAD":
-            return list(SAD_EMOTIONS)
         return list(BASE_EMOTIONS)
 
     def _refresh_emotion_options(self) -> None:
@@ -435,13 +428,13 @@ class AgentApp:
     def _friendly_status(self, state: str, message: str) -> tuple[str, str]:
         mapping = {
             "starting": "Startet",
-            "searching": "Suche DeskRobo",
+            "searching": "Suche MyDeskRobo",
             "connecting": "Verbinde",
             "connected": "Verbunden",
             "disconnected": "Nicht verbunden",
             "retry": "Neuversuch",
             "heartbeat_timeout": "Verbindung instabil",
-            "not_found": "DeskRobo nicht gefunden",
+            "not_found": "MyDeskRobo nicht gefunden",
             "stopping": "Stoppt",
             "stopped": "Gestoppt",
         }

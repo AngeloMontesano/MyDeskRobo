@@ -1,6 +1,6 @@
-# DeskRobo PC Agent
+# MyDeskRobo PC Agent
 
-Windows-Agent, der lokale Ereignisse erkennt und Emotionen per BLE an DeskRobo sendet.
+Windows-Agent, der lokale Ereignisse erkennt und Emotionen per BLE an MyDeskRobo sendet.
 
 ## Schnellstart (empfohlen)
 
@@ -35,7 +35,7 @@ cd pc_agent
 .\build_gui_exe.bat
 ```
 
-Ergebnis: `pc_agent\dist\DeskRoboAgent.exe`
+Ergebnis: `pc_agent\dist\MyDeskRoboAgent.exe`
 
 ## Modi
 
@@ -74,7 +74,7 @@ Ergebnis: `pc_agent\dist\DeskRoboAgent.exe`
 
 ## BLE Zeitsync
 
-- Beim Verbinden sendet der Agent automatisch die aktuelle Unix-Zeit an DeskRobo (TIME:<seq>:<epoch>).
+- Beim Verbinden sendet der Agent automatisch die aktuelle Unix-Zeit an MyDeskRobo (TIME:<seq>:<epoch>).
 - Danach erfolgt periodische Nachsynchronisierung (Standard: alle 10 Minuten).
 - Bei Fehler wird nach 30 Sekunden erneut versucht (konfigurierbar in config.py).
 
@@ -97,12 +97,12 @@ Weitere Beispiele:
 .\.venv\Scripts\python.exe pc_agent.py --emotion-name HAPPY --emotion-hold 4000
 
 # Linkes/Rechtes Auge setzen (inkl. Hold in ms)
-.\.venv\Scripts\python.exe pc_agent.py --eyes HAPPY:SAD:5000
+.\.venv\Scripts\python.exe pc_agent.py --eyes HAPPY:ANGRY:5000
 
 # Idle-Tuning setzen (mehrfach moeglich)
 .\.venv\Scripts\python.exe pc_agent.py --tune drift_amp_px=2 --tune blink_interval_ms=3500
 
 # Rohbefehl senden (CMD-Payload)
-.\.venv\Scripts\python.exe pc_agent.py --cmd "STYLE:ANGRY"
+.\.venv\Scripts\python.exe pc_agent.py --cmd "STYLE:EVE_CINEMATIC"
 ```
 

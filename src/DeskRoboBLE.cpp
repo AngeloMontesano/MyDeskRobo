@@ -14,7 +14,7 @@
 #include "LVGL_Arduino/Display_ST77916.h"
 
 namespace {
-constexpr const char *kDeviceName = "MyRoboDesk";
+constexpr const char *kDeviceName = "MyDeskRobo";
 constexpr const char *kServiceUuid = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
 constexpr const char *kIoCharUuid = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 
@@ -95,16 +95,11 @@ bool parseEmotion(const String &name, DeskRoboEmotion &out) {
   else if (name == "MAIL") out = DESKROBO_EMOTION_MAIL;
   else if (name == "CALL") out = DESKROBO_EMOTION_CALL;
   else if (name == "SHAKE") out = DESKROBO_EMOTION_SHAKE;
-  else if (name.startsWith("ANGRY_")) {
-    const int idx = name.substring(6).toInt();
-    if (idx >= 1 && idx <= 10) out = (DeskRoboEmotion)((int)DESKROBO_EMOTION_ANGRY_1 + (idx - 1));
-    else return false;
-  }
-  else if (name.startsWith("SAD_")) {
-    const int idx = name.substring(4).toInt();
-    if (idx >= 1 && idx <= 10) out = (DeskRoboEmotion)((int)DESKROBO_EMOTION_SAD_1 + (idx - 1));
-    else return false;
-  }
+  else if (name == "WINK") out = DESKROBO_EMOTION_WINK;
+  else if (name == "XX") out = DESKROBO_EMOTION_XX;
+  else if (name == "GLITCH") out = DESKROBO_EMOTION_GLITCH;
+  else if (name.startsWith("ANGRY_")) out = DESKROBO_EMOTION_ANGRY;
+  else if (name.startsWith("SAD_")) out = DESKROBO_EMOTION_SAD;
   else return false;
   return true;
 }
@@ -153,18 +148,6 @@ bool parseBoolToken(const String &in, bool &out) {
 bool parseStyleCode(const String &name, uint8_t &out) {
   if ((name == "EVE") || (name == "EVE_CINEMATIC")) {
     out = (uint8_t)DESKROBO_STYLE_EVE;
-    return true;
-  }
-  if (name == "FLUX") {
-    out = (uint8_t)DESKROBO_STYLE_FLUX;
-    return true;
-  }
-  if (name == "ANGRY") {
-    out = (uint8_t)DESKROBO_STYLE_ANGRY;
-    return true;
-  }
-  if (name == "SAD") {
-    out = (uint8_t)DESKROBO_STYLE_SAD;
     return true;
   }
   return false;
@@ -464,7 +447,7 @@ void handleTextCommand(String cmd) {
   }
 }
 
-class DeskRoboBleServerCallbacks : public BLEServerCallbacks {
+class MyDeskRoboBleServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer *server) override {
     g_device_connected = true;
     (void)server;
@@ -479,7 +462,7 @@ class DeskRoboBleServerCallbacks : public BLEServerCallbacks {
   }
 };
 
-class DeskRoboBleCharCallbacks : public BLECharacteristicCallbacks {
+class MyDeskRoboBleCharCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic *characteristic) override {
     String value = characteristic->getValue();
     if (value.length() == 0) return;
@@ -499,14 +482,14 @@ void DeskRoboBLE_Init() {
 
   BLEDevice::init(kDeviceName);
   BLEServer *server = BLEDevice::createServer();
-  server->setCallbacks(new DeskRoboBleServerCallbacks());
+  server->setCallbacks(new MyDeskRoboBleServerCallbacks());
 
   BLEService *service = server->createService(kServiceUuid);
   BLECharacteristic *characteristic = service->createCharacteristic(
       kIoCharUuid,
       BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR |
           BLECharacteristic::PROPERTY_NOTIFY);
-  characteristic->setCallbacks(new DeskRoboBleCharCallbacks());
+  characteristic->setCallbacks(new MyDeskRoboBleCharCallbacks());
   g_io_char = characteristic;
 
   service->start();
@@ -548,15 +531,8 @@ void DeskRoboBLE_Loop() {
         break;
       }
       case CMD_SET_STYLE: {
-        if (cmd.a == (uint8_t)DESKROBO_STYLE_FLUX) {
-          (void)DeskRobo_SetStyleByName("FLUX");
-        } else if (cmd.a == (uint8_t)DESKROBO_STYLE_ANGRY) {
-          (void)DeskRobo_SetStyleByName("ANGRY");
-        } else if (cmd.a == (uint8_t)DESKROBO_STYLE_SAD) {
-          (void)DeskRobo_SetStyleByName("SAD");
-        } else {
-          (void)DeskRobo_SetStyleByName("EVE_CINEMATIC");
-        }
+        (void)cmd.a;
+        (void)DeskRobo_SetStyleByName("EVE_CINEMATIC");
         break;
       }
       case CMD_SET_STATUS_LABEL:

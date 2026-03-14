@@ -18,12 +18,12 @@ if errorlevel 1 (
   exit /b 1
 )
 
-".venv\Scripts\python.exe" -m PyInstaller --noconfirm --onefile --windowed --name DeskRoboAgent agent_gui.py
+".venv\Scripts\python.exe" -m PyInstaller --noconfirm --onefile --windowed --name MyDeskRoboAgent agent_gui.py
 if errorlevel 1 (
   echo EXE-Build fehlgeschlagen.
   pause
   exit /b 1
 )
 
-echo Fertig. EXE unter: dist\DeskRoboAgent.exe
+echo Fertig. EXE unter: dist\MyDeskRoboAgent.exe
 pause

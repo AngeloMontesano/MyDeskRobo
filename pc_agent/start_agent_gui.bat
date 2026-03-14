@@ -11,5 +11,5 @@ if not exist ".venv\Scripts\pythonw.exe" (
   exit /b 1
 )
 
-start "DeskRobo Agent" ".venv\Scripts\pythonw.exe" "agent_gui.py"
+start "MyDeskRobo Agent" ".venv\Scripts\pythonw.exe" "agent_gui.py"
 exit /b 0
