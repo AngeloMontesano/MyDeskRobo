@@ -5,6 +5,12 @@
 
 int px_sin(uint32_t t, uint32_t period, int amp);
 
+
+static int16_t eye_gap_for_emotions(Emotion left, Emotion right) {
+  if (left == EMOTION_ANGRY || right == EMOTION_ANGRY) return 58;
+  return 68;
+}
+
 static lv_color_t tuned_eye_color(const AnimeFace::Tuning &tuning) {
   return lv_color_make((uint8_t)constrain(tuning.eye_color_r, 0, 255),
                        (uint8_t)constrain(tuning.eye_color_g, 0, 255),
@@ -254,7 +260,7 @@ void AnimeFace::update() {
   const Emotion left = use_pair_override_ ? left_override_ : current_;
   const Emotion right = use_pair_override_ ? right_override_ : current_;
 
-  const int16_t eye_gap = 68;
+  const int16_t eye_gap = eye_gap_for_emotions(left, right);
   lv_obj_clean(canvas_);
   drawEye(CX - eye_gap + drift_dx_ + saccade_dx_, CY + drift_dy_ + saccade_dy_, left, false, blink);
   drawEye(CX + eye_gap + drift_dx_ + saccade_dx_, CY + drift_dy_ + saccade_dy_, right, true, blink);
@@ -285,7 +291,7 @@ int px_sin(uint32_t t, uint32_t period, int amp) {
 void AnimeFace::drawFace() {
   const Emotion left = use_pair_override_ ? left_override_ : current_;
   const Emotion right = use_pair_override_ ? right_override_ : current_;
-  const int16_t eye_gap = 68;
+  const int16_t eye_gap = eye_gap_for_emotions(left, right);
   drawEye(CX - eye_gap, CY, left, false, false);
   drawEye(CX + eye_gap, CY, right, true, false);
 
@@ -324,6 +330,8 @@ void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool
   int16_t brow_gap = 0;
   int16_t brow_angle = 0;
   int16_t brow_dx = 0;
+  lv_opa_t brow_opa = LV_OPA_COVER;
+  bool use_angry_spec = false;
   const lv_color_t bg = lv_color_hex(0x06080D);
   const uint8_t idle_phase = (uint8_t)((millis() / 2400U) % 4U);
 
@@ -413,17 +421,18 @@ void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool
         brow_angle = 760;
         brow_dx = 6;
       } else {
-        h = blink ? h : 66;
-        w = 62;
-        cy += 8;
-        carve_top = !blink;
-        carve_h = 10;
+        h = blink ? h : 114;
+        w = 58;
+        cy += 0;
+        add_side_shadow = false;
         add_brow_angry = !blink;
-        brow_w = 46;
-        brow_h = 6;
-        brow_gap = 13;
-        brow_angle = 620;
-        brow_dx = 5;
+        brow_w = 76;
+        brow_h = 11;
+        brow_gap = 17;
+        brow_angle = 390;
+        brow_dx = 9;
+        brow_opa = (lv_opa_t)115;
+        use_angry_spec = !blink;
       }
       break;
     case EMOTION_WOW:
@@ -575,12 +584,12 @@ void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool
   if (w < 10) w = 10;
   if (h < 6) h = 6;
 
-  const int glow_pad = subtle_style ? 6 : (comic_style ? 10 : 8);
-  const int mid_pad = subtle_style ? 2 : (comic_style ? 4 : 3);
-  const int glow_base = subtle_style ? 14 : (comic_style ? 26 : 20);
-  const int glow_hi = subtle_style ? 46 : (comic_style ? 70 : 60);
-  const int mid_base = subtle_style ? 70 : (comic_style ? 96 : 86);
-  const int mid_hi = subtle_style ? 122 : (comic_style ? 156 : 140);
+  const int glow_pad = use_angry_spec ? 10 : (subtle_style ? 6 : (comic_style ? 10 : 8));
+  const int mid_pad = use_angry_spec ? 4 : (subtle_style ? 2 : (comic_style ? 4 : 3));
+  const int glow_base = use_angry_spec ? 46 : (subtle_style ? 14 : (comic_style ? 26 : 20));
+  const int glow_hi = use_angry_spec ? 46 : (subtle_style ? 46 : (comic_style ? 70 : 60));
+  const int mid_base = use_angry_spec ? 115 : (subtle_style ? 70 : (comic_style ? 96 : 86));
+  const int mid_hi = use_angry_spec ? 115 : (subtle_style ? 122 : (comic_style ? 156 : 140));
   const lv_coord_t eye_radius = LV_RADIUS_CIRCLE;
 
   lv_obj_t *glow = lv_obj_create(canvas_);
@@ -615,7 +624,24 @@ void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool
     lv_obj_set_style_bg_opa(core, LV_OPA_COVER, 0);
   }
 
-  if (carve_top && (carve_h > 0)) {
+  if (use_angry_spec) {
+    lv_obj_t *cut = lv_obj_create(canvas_);
+    lv_obj_remove_style_all(cut);
+    lv_obj_set_size(cut, 104, 40);
+    lv_obj_set_pos(cut, cx - 104 / 2 + (isRight ? -3 : 3), cy - 49 - 40 / 2);
+    lv_obj_set_style_radius(cut, 3, 0);
+    lv_obj_set_style_bg_color(cut, bg, 0);
+    lv_obj_set_style_bg_opa(cut, LV_OPA_COVER, 0);
+    lv_obj_set_style_transform_angle(cut, isRight ? -200 : 200, 0);
+
+    lv_obj_t *glow2 = lv_obj_create(canvas_);
+    lv_obj_remove_style_all(glow2);
+    lv_obj_set_size(glow2, 68, 120);
+    lv_obj_set_pos(glow2, cx - 68 / 2, cy - 120 / 2);
+    lv_obj_set_style_radius(glow2, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(glow2, color, 0);
+    lv_obj_set_style_bg_opa(glow2, (lv_opa_t)46, 0);
+  } else if (carve_top && (carve_h > 0)) {
     lv_obj_t *cut = lv_obj_create(canvas_);
     lv_obj_remove_style_all(cut);
     lv_obj_set_size(cut, w + 30, carve_h + 30);
@@ -665,7 +691,7 @@ void AnimeFace::drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool
     lv_obj_set_pos(brow, cx - brow_w / 2 + (isRight ? brow_dx : -brow_dx), cy - h / 2 - brow_gap);
     lv_obj_set_style_radius(brow, 2, 0);
     lv_obj_set_style_bg_color(brow, color, 0);
-    lv_obj_set_style_bg_opa(brow, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_opa(brow, brow_opa, 0);
     lv_obj_set_style_transform_angle(brow, isRight ? brow_angle : -brow_angle, 0);
   }
 

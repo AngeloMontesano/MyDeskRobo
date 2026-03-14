@@ -1,0 +1,759 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DeskRobo Eye Designer</title>
+<style>
+:root {
+  --bg: #0b1018;
+  --panel: #131b27;
+  --panel-2: #1a2433;
+  --line: #2a3648;
+  --text: #e7f0ff;
+  --muted: #95a6c2;
+  --accent: #35d6ff;
+  --danger: #ff6a6a;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: Consolas, "Segoe UI", sans-serif;
+  background: radial-gradient(circle at top, #10192a 0%, var(--bg) 55%);
+  color: var(--text);
+}
+button, input, select, textarea { font: inherit; }
+button, select, input, textarea {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+button { cursor: pointer; padding: 10px 12px; }
+button:hover { border-color: var(--accent); }
+input, select, textarea { width: 100%; padding: 8px 10px; }
+textarea { min-height: 200px; resize: vertical; }
+label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.app {
+  display: grid;
+  grid-template-columns: 360px minmax(460px, 1fr) 430px;
+  gap: 16px;
+  padding: 16px;
+  min-height: 100vh;
+}
+.panel {
+  background: rgba(19, 27, 39, 0.92);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: 0 12px 30px rgba(0,0,0,.25);
+}
+.panel h2, .panel h3 { margin: 0 0 10px; font-size: 16px; }
+.header {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.header h1 { margin: 0; font-size: 22px; }
+.header p { margin: 4px 0 0; color: var(--muted); }
+.actions, .grid2, .grid3, .grid4 {
+  display: grid;
+  gap: 8px;
+}
+.actions { grid-template-columns: repeat(3, 1fr); }
+.grid2 { grid-template-columns: repeat(3, 1fr); }
+.grid3 { grid-template-columns: repeat(3, 1fr); }
+.grid4 { grid-template-columns: repeat(4, 1fr); }
+.canvas-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+.canvas-shell {
+  width: min(100%, 640px);
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #0d1522, #0a1019);
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  overflow: hidden;
+}
+canvas {
+  background: #06080d;
+  border: 1px solid rgba(255,255,255,.06);
+}
+.layer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 420px;
+  overflow: auto;
+}
+.layer-item {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  background: #111927;
+}
+.layer-item.active {
+  border-color: var(--accent);
+  background: #0f2130;
+}
+.layer-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.layer-meta { font-size: 12px; color: var(--muted); }
+.small-btns { display: flex; gap: 6px; }
+.small-btns button { padding: 6px 8px; font-size: 12px; }
+.pill {
+  display: inline-block;
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+}
+.note { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.export-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.export-tabs button.active { border-color: var(--accent); color: var(--accent); }
+.hidden { display: none; }
+.badge-row { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 1420px) {
+  .app { grid-template-columns: 360px 1fr; }
+  .export-panel { grid-column: 1 / -1; }
+}
+@media (max-width: 980px) {
+  .app { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header panel">
+    <div>
+      <h1>DeskRobo Eye Designer</h1>
+      <p>Baue Augen aus Layern und exportiere JSON, Renderer Spec und C++ fuer den Renderer.</p>
+    </div>
+    <div class="badge-row">
+      <div class="pill">360x360 Modell</div>
+      <div class="pill">Lokal, ohne Build</div>
+    </div>
+  </div>
+
+  <section class="panel">
+    <h2>Szene</h2>
+    <div class="grid2">
+      <div>
+        <label>Preset</label>
+        <select id="presetSelect">
+          <option value="eve_base">EVE Base (fix)</option>
+          <option value="angry5">Angry 5 Basis</option>
+          <option value="sad">Sad Basis</option>
+          <option value="empty">Leer</option>
+        </select>
+      </div>
+      <div>
+        <label>Name</label>
+        <input id="sceneName" value="custom_eye_scene">
+      </div>
+      <div>
+        <label>Augenfarbe</label>
+        <input id="eyeColor" type="color" value="#0fdaff">
+      </div>
+      <div>
+        <label>Hintergrund</label>
+        <input id="bgColor" type="color" value="#06080d">
+      </div>
+      <div>
+        <label>Augenabstand</label>
+        <input id="eyeGap" type="number" value="68">
+      </div>
+      <div>
+        <label>Basis Y</label>
+        <input id="baseY" type="number" value="180">
+      </div>
+      <div>
+        <label>Preview Form</label>
+        <select id="screenShape">
+          <option value="square">Quadratisch</option>
+          <option value="round">Rund</option>
+          <option value="rounded">Rounded</option>
+        </select>
+      </div>
+      <div>
+        <label>Preview Pixelgroesse</label>
+        <select id="screenSize">
+          <option value="360">360 x 360</option>
+          <option value="320">320 x 320</option>
+          <option value="400">400 x 400</option>
+          <option value="480">480 x 480</option>
+        </select>
+      </div>
+    </div>
+    <div class="actions" style="margin-top:10px">
+      <button id="loadPresetBtn">Preset laden</button>
+      <button id="importBtn">JSON importieren</button>
+      <button id="resetViewBtn">Vorschau zentrieren</button>
+    </div>
+    <p class="note" style="margin-top:10px">Typen: <code>glow</code>, <code>mid</code>, <code>core</code>, <code>ellipse</code>, <code>rect</code>, <code>cut_rect</code>, <code>brow</code>. `cut_rect` schneidet mit Hintergrundfarbe etwas vom Auge weg.</p>
+
+    <h3 style="margin-top:16px">Layer</h3>
+    <div class="grid4">
+      <button data-add="glow">Glow</button>
+      <button data-add="mid">Mid</button>
+      <button data-add="core">Core</button>
+      <button data-add="pupil">Pupil</button>
+      <button data-add="brow">Brow</button>
+      <button data-add="ellipse">Ellipse</button>
+      <button data-add="rect">Rect</button>
+      <button data-add="cut_rect">Cut Layer</button>
+    </div>
+    <div class="layer-list" id="layerList" style="margin-top:10px"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Vorschau</h2>
+    <div class="canvas-wrap">
+      <div class="canvas-shell" id="canvasShell">
+        <canvas id="preview" width="360" height="360"></canvas>
+      </div>
+      <div class="grid4" style="width:100%">
+        <div><label>Arbeits-Zoom</label><input id="zoom" type="range" min="1" max="6" step="0.1" value="1.8"></div>
+        <div><label>Offset X</label><input id="panX" type="range" min="-180" max="180" step="1" value="0"></div>
+        <div><label>Offset Y</label><input id="panY" type="range" min="-180" max="180" step="1" value="0"></div>
+              </div>
+    </div>
+
+    <h3 style="margin-top:16px">Layer bearbeiten</h3>
+    <div id="layerEditor" class="note">Waehle links einen Layer aus.</div>
+  </section>
+
+  <section class="panel export-panel">
+    <h2>Export</h2>
+    <div class="export-tabs">
+      <button id="jsonTab" class="active">JSON</button>
+      <button id="specTab">Renderer Spec</button>
+      <button id="cppTab">C++</button>
+    </div>
+    <textarea id="jsonOutput"></textarea>
+    <textarea id="specOutput" class="hidden"></textarea>
+    <textarea id="cppOutput" class="hidden"></textarea>
+    <div class="actions" style="margin-top:10px">
+      <button id="copyJsonBtn">JSON kopieren</button>
+      <button id="copySpecBtn">Spec kopieren</button>
+      <button id="copyCppBtn">C++ kopieren</button>
+      <button id="downloadBtn">JSON speichern</button>
+    </div>
+    <p class="note" style="margin-top:10px">`Renderer Spec` ist das verlustarme Zielformat. Darin stehen die Zeichenoperationen explizit, damit ich deine Form spaeter 1:1 in den Robo-Renderer uebernehmen kann.</p>
+  </section>
+</div>
+
+<script>
+const presets = {
+  empty: { eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 180, screenShape: 'square', screenSize: 360, layers: [] },
+  eve_base: {
+    eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 180, screenShape: 'round', screenSize: 360,
+    layers: [
+      { name: 'Glow', type: 'glow', side: 'both', x: 0, y: 0, w: 74, h: 114, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 42 },
+      { name: 'Mid', type: 'mid', side: 'both', x: 0, y: 0, w: 68, h: 108, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 110 },
+      { name: 'Core', type: 'core', side: 'both', x: 0, y: 0, w: 62, h: 104, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 255 }
+    ]
+  },
+  xx: {
+    eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 180, screenShape: 'round', screenSize: 360,
+    layers: [
+      { name: 'Slash A', type: 'rect', side: 'both', x: 0, y: 0, w: 18, h: 92, radius: 6, angle: 42, colorMode: 'eye', color: '#0fdaff', opacity: 255 },
+      { name: 'Slash B', type: 'rect', side: 'both', x: 0, y: 0, w: 18, h: 92, radius: 6, angle: -42, colorMode: 'eye', color: '#0fdaff', opacity: 255 }
+    ]
+  },
+  angry5: {
+    eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 191, screenShape: 'round', screenSize: 360,
+    layers: [
+      { name: 'Glow', type: 'glow', side: 'both', x: 0, y: 0, w: 64, h: 62, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 56 },
+      { name: 'Mid', type: 'mid', side: 'both', x: 0, y: 0, w: 58, h: 56, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 128 },
+      { name: 'Core', type: 'core', side: 'both', x: 0, y: 0, w: 52, h: 50, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 255 },
+      { name: 'Top Cut', type: 'cut_rect', side: 'both', x: 0, y: -25, w: 82, h: 28, radius: 3, angle: 6, colorMode: 'bg', color: '#06080d', opacity: 255 },
+      { name: 'Brow', type: 'brow', side: 'both', x: 0, y: -45, w: 40, h: 8, radius: 3, angle: 78, colorMode: 'eye', color: '#0fdaff', opacity: 255 }
+    ]
+  },
+  sad: {
+    eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 188, screenShape: 'round', screenSize: 360,
+    layers: [
+      { name: 'Glow', type: 'glow', side: 'both', x: 0, y: 0, w: 74, h: 108, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 46 },
+      { name: 'Mid', type: 'mid', side: 'both', x: 0, y: 0, w: 70, h: 104, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 122 },
+      { name: 'Core', type: 'core', side: 'both', x: 0, y: 0, w: 68, h: 102, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 255 },
+      { name: 'Lid Cut', type: 'cut_rect', side: 'both', x: 0, y: -18, w: 84, h: 10, radius: 3, angle: 0, colorMode: 'bg', color: '#06080d', opacity: 255 },
+      { name: 'Brow', type: 'brow', side: 'both', x: 0, y: -64, w: 46, h: 7, radius: 3, angle: 32, colorMode: 'eye', color: '#0fdaff', opacity: 255 }
+    ]
+  }
+};
+
+const state = {
+  sceneName: 'custom_eye_scene',
+  eyeColor: '#0fdaff',
+  bgColor: '#06080d',
+  eyeGap: 68,
+  baseY: 180,
+  screenShape: 'round',
+  screenSize: 360,
+  layers: [],
+  selectedLayerId: null,
+  outputMode: 'json'
+};
+
+let nextId = 1;
+const el = id => document.getElementById(id);
+const layerList = el('layerList');
+const layerEditor = el('layerEditor');
+const canvas = el('preview');
+const shell = el('canvasShell');
+const ctx = canvas.getContext('2d');
+
+function clone(v) { return JSON.parse(JSON.stringify(v)); }
+function uid() { return nextId++; }
+function radians(deg) { return deg * Math.PI / 180; }
+function layerColor(layer) {
+  if (layer.colorMode === 'eye') return state.eyeColor;
+  if (layer.colorMode === 'bg') return state.bgColor;
+  return layer.color;
+}
+function alphaColor(hex, opacity) {
+  const c = hex.replace('#', '');
+  const r = parseInt(c.slice(0, 2), 16);
+  const g = parseInt(c.slice(2, 4), 16);
+  const b = parseInt(c.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${Math.max(0, Math.min(255, opacity)) / 255})`;
+}
+function sideApplies(side, target) { return side === 'both' || side === target; }
+function mirroredX(layer, side) { return side === 'right' ? -layer.x : layer.x; }
+function mirroredAngle(layer, side) { return side === 'right' ? -layer.angle : layer.angle; }
+
+function defaultLayer(type) {
+  const base = {
+    id: uid(), enabled: true, name: 'Layer', type, side: 'both', x: 0, y: 0,
+    w: 62, h: 104, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 255
+  };
+  if (type === 'glow') return { ...base, name: 'Glow', w: 74, h: 114, opacity: 42 };
+  if (type === 'mid') return { ...base, name: 'Mid', w: 68, h: 108, opacity: 110 };
+  if (type === 'core') return { ...base, name: 'Core', w: 62, h: 104, opacity: 255 };
+  if (type === 'pupil') return { ...base, name: 'Pupil', w: 18, h: 34, x: 0, y: 0, opacity: 170 };
+  if (type === 'brow') return { ...base, name: 'Brow', w: 40, h: 8, y: -54, angle: 42, radius: 3, opacity: 255 };
+  if (type === 'cut_rect') return { ...base, name: 'Cut', w: 84, h: 18, y: -24, angle: 8, radius: 3, colorMode: 'bg', opacity: 255 };
+  if (type === 'rect') return { ...base, name: 'Rect', w: 58, h: 80, radius: 8 };
+  return { ...base, name: 'Ellipse', w: 58, h: 80, radius: 999 };
+}
+
+function loadPreset(key) {
+  const preset = clone(presets[key]);
+  state.sceneName = `${key}_scene`;
+  state.eyeColor = preset.eyeColor;
+  state.bgColor = preset.bgColor;
+  state.eyeGap = preset.eyeGap;
+  state.baseY = preset.baseY;
+  state.screenShape = preset.screenShape || 'square';
+  state.screenSize = preset.screenSize || 360;
+  state.layers = preset.layers.map(layer => ({ ...layer, id: uid(), enabled: layer.enabled !== false }));
+  state.selectedLayerId = state.layers[0]?.id ?? null;
+  syncInputsFromState();
+  refresh();
+}
+
+function syncInputsFromState() {
+  el('sceneName').value = state.sceneName;
+  el('eyeColor').value = state.eyeColor;
+  el('bgColor').value = state.bgColor;
+  el('eyeGap').value = state.eyeGap;
+  el('baseY').value = state.baseY;
+  el('screenShape').value = state.screenShape;
+  el('screenSize').value = String(state.screenSize);
+}
+
+function currentLayer() {
+  return state.layers.find(layer => layer.id === state.selectedLayerId) || null;
+}
+
+function drawRoundedRect(x, y, w, h, r) {
+  const rr = Math.max(0, Math.min(r, Math.min(w, h) / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+
+function layerDrawMode(type) {
+  if (type === 'glow' || type === 'mid' || type === 'core' || type === 'pupil' || type === 'ellipse') return 'lvgl_round';
+  return 'rect';
+}
+
+function drawLayerForSide(layer, side, eyeCenterX) {
+  if (!layer.enabled || !sideApplies(layer.side, side)) return;
+  const x = eyeCenterX + mirroredX(layer, side);
+  const y = state.baseY + layer.y;
+  const color = layerColor(layer);
+  const angle = mirroredAngle(layer, side);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(radians(angle));
+  ctx.fillStyle = alphaColor(color, layer.opacity);
+  const mode = layerDrawMode(layer.type);
+  if (mode === 'lvgl_round') {
+    drawRoundedRect(-layer.w / 2, -layer.h / 2, layer.w, layer.h, Math.min(layer.w, layer.h) / 2);
+    ctx.fill();
+  } else {
+    drawRoundedRect(-layer.w / 2, -layer.h / 2, layer.w, layer.h, layer.radius);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function applyScreenMask() {
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-in';
+  ctx.fillStyle = '#ffffff';
+  if (state.screenShape === 'round') {
+    ctx.beginPath();
+    ctx.arc(canvas.width / 2, canvas.height / 2, Math.min(canvas.width, canvas.height) / 2, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (state.screenShape === 'rounded') {
+    drawRoundedRect(0, 0, canvas.width, canvas.height, 42);
+    ctx.fill();
+  } else {
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  ctx.restore();
+}
+
+function updateCanvasGeometry() {
+  const px = Number(el('screenSize').value);
+    state.screenSize = px;
+  canvas.width = px;
+  canvas.height = px;
+  const css = Math.min(px, 540);
+  canvas.style.width = `${css}px`;
+  canvas.style.height = `${css}px`;
+  if (state.screenShape === 'round') {
+    canvas.style.borderRadius = '50%';
+    shell.style.borderRadius = '50%';
+  } else if (state.screenShape === 'rounded') {
+    canvas.style.borderRadius = '28px';
+    shell.style.borderRadius = '34px';
+  } else {
+    canvas.style.borderRadius = '8px';
+    shell.style.borderRadius = '28px';
+  }
+}
+
+function renderPreview() {
+  updateCanvasGeometry();
+  const zoom = Number(el('zoom').value);
+  const panX = Number(el('panX').value);
+  const panY = Number(el('panY').value);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.translate(canvas.width / 2 + panX, canvas.height / 2 + panY);
+  ctx.scale(zoom * (canvas.width / 360), zoom * (canvas.height / 360));
+  ctx.translate(-180, -180);
+
+  ctx.save();
+  if (state.screenShape === 'round') {
+    ctx.beginPath();
+    ctx.arc(180, 180, 180, 0, Math.PI * 2);
+    ctx.clip();
+  } else if (state.screenShape === 'rounded') {
+    drawRoundedRect(0, 0, 360, 360, 42);
+    ctx.clip();
+  }
+  ctx.fillStyle = state.bgColor;
+  ctx.fillRect(0, 0, 360, 360);
+  const leftX = 180 - state.eyeGap;
+  const rightX = 180 + state.eyeGap;
+  state.layers.forEach(layer => drawLayerForSide(layer, 'left', leftX));
+  state.layers.forEach(layer => drawLayerForSide(layer, 'right', rightX));
+  ctx.restore();
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1.2;
+  if (state.screenShape === 'round') {
+    ctx.beginPath();
+    ctx.arc(180, 180, 180, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (state.screenShape === 'rounded') {
+    drawRoundedRect(0, 0, 360, 360, 42);
+    ctx.stroke();
+  } else {
+    ctx.strokeRect(0, 0, 360, 360);
+  }
+  ctx.restore();
+}
+
+function renderLayerList() {
+  layerList.innerHTML = '';
+  state.layers.forEach((layer, index) => {
+    const item = document.createElement('div');
+    item.className = 'layer-item' + (layer.id === state.selectedLayerId ? ' active' : '');
+    item.innerHTML = `
+      <div class="layer-top">
+        <div>
+          <div><strong>${index + 1}. ${layer.name}</strong></div>
+          <div class="layer-meta">${layer.type} | ${layer.side} | ${layer.enabled ? 'aktiv' : 'aus'}</div>
+        </div>
+        <div class="small-btns">
+          <button data-act="up">?</button>
+          <button data-act="down">?</button>
+          <button data-act="toggle">${layer.enabled ? 'Aus' : 'An'}</button>
+          <button data-act="delete" style="border-color:var(--danger);color:var(--danger)">X</button>
+        </div>
+      </div>`;
+    item.addEventListener('click', e => {
+      if (e.target.tagName === 'BUTTON') return;
+      state.selectedLayerId = layer.id;
+      refresh();
+    });
+    item.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const act = btn.dataset.act;
+        const idx = state.layers.findIndex(x => x.id === layer.id);
+        if (act === 'up' && idx > 0) [state.layers[idx - 1], state.layers[idx]] = [state.layers[idx], state.layers[idx - 1]];
+        if (act === 'down' && idx < state.layers.length - 1) [state.layers[idx + 1], state.layers[idx]] = [state.layers[idx], state.layers[idx + 1]];
+        if (act === 'toggle') layer.enabled = !layer.enabled;
+        if (act === 'delete') {
+          state.layers = state.layers.filter(x => x.id !== layer.id);
+          if (state.selectedLayerId === layer.id) state.selectedLayerId = state.layers[0]?.id ?? null;
+        }
+        refresh();
+      });
+    });
+    layerList.appendChild(item);
+  });
+}
+
+function numberField(id, label, value, step = 1) {
+  return `<div><label>${label}</label><input data-field="${id}" type="number" step="${step}" value="${value}"></div>`;
+}
+
+function renderLayerEditor() {
+  const layer = currentLayer();
+  if (!layer) {
+    layerEditor.className = 'note';
+    layerEditor.textContent = 'Waehle links einen Layer aus.';
+    return;
+  }
+  layerEditor.className = '';
+  layerEditor.innerHTML = `
+    <div class="grid2">
+      <div><label>Name</label><input data-field="name" value="${layer.name}"></div>
+      <div><label>Typ</label>
+        <select data-field="type">
+          <option value="glow" ${layer.type === 'glow' ? 'selected' : ''}>glow</option>
+          <option value="mid" ${layer.type === 'mid' ? 'selected' : ''}>mid</option>
+          <option value="core" ${layer.type === 'core' ? 'selected' : ''}>core</option>
+          <option value="pupil" ${layer.type === 'pupil' ? 'selected' : ''}>pupil</option>
+          <option value="ellipse" ${layer.type === 'ellipse' ? 'selected' : ''}>ellipse</option>
+          <option value="rect" ${layer.type === 'rect' ? 'selected' : ''}>rect</option>
+          <option value="cut_rect" ${layer.type === 'cut_rect' ? 'selected' : ''}>cut_rect</option>
+          <option value="brow" ${layer.type === 'brow' ? 'selected' : ''}>brow</option>
+        </select>
+      </div>
+      <div><label>Seite</label>
+        <select data-field="side">
+          <option value="both" ${layer.side === 'both' ? 'selected' : ''}>both</option>
+          <option value="left" ${layer.side === 'left' ? 'selected' : ''}>left</option>
+          <option value="right" ${layer.side === 'right' ? 'selected' : ''}>right</option>
+        </select>
+      </div>
+      <div><label>Farbmodus</label>
+        <select data-field="colorMode">
+          <option value="eye" ${layer.colorMode === 'eye' ? 'selected' : ''}>eye</option>
+          <option value="bg" ${layer.colorMode === 'bg' ? 'selected' : ''}>bg</option>
+          <option value="custom" ${layer.colorMode === 'custom' ? 'selected' : ''}>custom</option>
+        </select>
+      </div>
+      <div><label>Eigene Farbe</label><input data-field="color" type="color" value="${layer.color}"></div>
+      <div><label>Opacity (0-255)</label><input data-field="opacity" type="number" step="1" min="0" max="255" value="${layer.opacity}"></div>
+      ${numberField('x', 'Offset X', layer.x)}
+      ${numberField('y', 'Offset Y', layer.y)}
+      ${numberField('w', 'Breite', layer.w)}
+      ${numberField('h', 'Hoehe', layer.h)}
+      ${numberField('radius', 'Radius', layer.radius)}
+      ${numberField('angle', 'Winkel', layer.angle)}
+    </div>`;
+  layerEditor.querySelectorAll('[data-field]').forEach(input => {
+    input.addEventListener('input', () => {
+      const key = input.dataset.field;
+      if (['name', 'type', 'side', 'colorMode', 'color'].includes(key)) {
+        layer[key] = input.value;
+      } else {
+        layer[key] = Number(input.value);
+      }
+      refresh();
+    });
+  });
+}
+
+function exportScene() {
+  const scene = {
+    sceneName: state.sceneName,
+    eyeColor: state.eyeColor,
+    bgColor: state.bgColor,
+    eyeGap: state.eyeGap,
+    baseY: state.baseY,
+    screenShape: state.screenShape,
+    screenSize: state.screenSize,
+    layers: state.layers.map(({ id, ...layer }) => layer)
+  };
+  el('jsonOutput').value = JSON.stringify(scene, null, 2);
+
+  const rendererSpec = {
+    specVersion: 1,
+    kind: 'deskrobo.eye_scene',
+    scene: {
+      name: state.sceneName,
+      geometry: {
+        virtualWidth: 360,
+        virtualHeight: 360,
+        eyeGap: state.eyeGap,
+        baseY: state.baseY,
+        screenShape: state.screenShape,
+        screenSize: state.screenSize
+      },
+      palette: {
+        eyeColorSource: 'runtime_tuning',
+        eyeColorFallback: state.eyeColor,
+        bgColorSource: 'scene',
+        bgColor: state.bgColor
+      },
+      animationHints: {
+        blinkCompatible: true,
+        pulseCompatible: true,
+        driftCompatible: true,
+        notes: 'Formdaten 1:1 uebernehmen, Farbe weiter aus Runtime-Tuning ziehen.'
+      },
+      operations: state.layers.map(layer => ({
+        enabled: layer.enabled !== false,
+        name: layer.name,
+        op: specOp(layer.type),
+        primitive: specPrimitive(layer.type),
+        side: layer.side,
+        mirrorXForRight: true,
+        mirrorAngleForRight: true,
+        offset: { x: layer.x, y: layer.y },
+        size: { w: layer.w, h: layer.h },
+        radius: layer.radius,
+        angleDeg: layer.angle,
+        color: {
+          mode: layer.colorMode,
+          value: layer.color,
+          runtimeLinked: layer.colorMode === 'eye'
+        },
+        opacity: layer.opacity
+      }))
+    }
+  };
+  el('specOutput').value = JSON.stringify(rendererSpec, null, 2);
+
+  const cppLayers = state.layers.map(layer => `  { ${layer.enabled ? 'true' : 'false'}, "${layer.name}", LayerType::${cppType(layer.type)}, Side::${cppSide(layer.side)}, ${layer.x}, ${layer.y}, ${layer.w}, ${layer.h}, ${layer.radius}, ${layer.angle}, ColorMode::${cppColorMode(layer.colorMode)}, "${layer.color}", ${layer.opacity} },`).join('\n');
+  el('cppOutput').value = `struct EyeLayerSpec {\n  bool enabled;\n  const char* name;\n  LayerType type;\n  Side side;\n  int16_t x;\n  int16_t y;\n  int16_t w;\n  int16_t h;\n  int16_t radius;\n  int16_t angle;\n  ColorMode color_mode;\n  const char* color_hex;\n  uint8_t opacity;\n};\n\nstatic const EyeLayerSpec k${pascal(state.sceneName)}[] = {\n${cppLayers}\n};\n\n// eye_gap=${state.eyeGap}, base_y=${state.baseY}, screen_shape=${state.screenShape}, screen_size=${state.screenSize}`;
+}
+
+function cppType(type) { return ({ glow: 'Glow', mid: 'Mid', core: 'Core', pupil: 'Pupil', ellipse: 'Ellipse', rect: 'Rect', cut_rect: 'CutRect', brow: 'Brow' })[type] || 'Rect'; }
+function specOp(type) { return ({ glow: 'draw_glow', mid: 'draw_mid', core: 'draw_core', pupil: 'draw_shape', ellipse: 'draw_shape', rect: 'draw_shape', cut_rect: 'draw_cut', brow: 'draw_brow' })[type] || 'draw_shape'; }
+function specPrimitive(type) { return ({ glow: 'ellipse', mid: 'ellipse', core: 'ellipse', pupil: 'ellipse', ellipse: 'ellipse', rect: 'rounded_rect', cut_rect: 'rounded_rect', brow: 'rounded_rect' })[type] || 'rounded_rect'; }
+function cppSide(side) { return ({ both: 'Both', left: 'Left', right: 'Right' })[side] || 'Both'; }
+function cppColorMode(mode) { return ({ eye: 'Eye', bg: 'Background', custom: 'Custom' })[mode] || 'Eye'; }
+function pascal(name) { return name.replace(/(^|[_\-\s]+)([a-zA-Z0-9])/g, (_, __, c) => c.toUpperCase()).replace(/[^A-Za-z0-9]/g, ''); }
+
+function refresh() {
+  state.sceneName = el('sceneName').value.trim() || 'custom_eye_scene';
+  state.eyeColor = el('eyeColor').value;
+  state.bgColor = el('bgColor').value;
+  state.eyeGap = Number(el('eyeGap').value);
+  state.baseY = Number(el('baseY').value);
+  state.screenShape = el('screenShape').value;
+  renderLayerList();
+  renderLayerEditor();
+  renderPreview();
+  exportScene();
+}
+
+function copyText(text) { navigator.clipboard.writeText(text).catch(() => {}); }
+
+el('loadPresetBtn').addEventListener('click', () => loadPreset(el('presetSelect').value));
+el('importBtn').addEventListener('click', () => {
+  try {
+    const parsed = JSON.parse(prompt('JSON Szene einfuegen:') || '');
+    state.sceneName = parsed.sceneName || 'imported_eye_scene';
+    state.eyeColor = parsed.eyeColor || '#0fdaff';
+    state.bgColor = parsed.bgColor || '#06080d';
+    state.eyeGap = Number(parsed.eyeGap || 68);
+    state.baseY = Number(parsed.baseY || 180);
+    state.screenShape = parsed.screenShape || 'square';
+    state.screenSize = Number(parsed.screenSize || 360);
+    state.layers = (parsed.layers || []).map(layer => ({ ...layer, id: uid(), enabled: layer.enabled !== false }));
+    state.selectedLayerId = state.layers[0]?.id ?? null;
+    syncInputsFromState();
+    refresh();
+  } catch (_err) {
+    alert('JSON konnte nicht gelesen werden.');
+  }
+});
+el('resetViewBtn').addEventListener('click', () => {
+  el('zoom').value = 1.8;
+  el('panX').value = 0;
+  el('panY').value = 0;
+  renderPreview();
+});
+document.querySelectorAll('[data-add]').forEach(btn => btn.addEventListener('click', () => {
+  const layer = defaultLayer(btn.dataset.add);
+  state.layers.push(layer);
+  state.selectedLayerId = layer.id;
+  refresh();
+}));
+['sceneName','eyeColor','bgColor','eyeGap','baseY','screenShape','screenSize','zoom','panX','panY'].forEach(id => el(id).addEventListener('input', refresh));
+el('jsonTab').addEventListener('click', () => {
+  el('jsonTab').classList.add('active'); el('specTab').classList.remove('active'); el('cppTab').classList.remove('active');
+  el('jsonOutput').classList.remove('hidden'); el('specOutput').classList.add('hidden'); el('cppOutput').classList.add('hidden');
+});
+el('specTab').addEventListener('click', () => {
+  el('specTab').classList.add('active'); el('jsonTab').classList.remove('active'); el('cppTab').classList.remove('active');
+  el('specOutput').classList.remove('hidden'); el('jsonOutput').classList.add('hidden'); el('cppOutput').classList.add('hidden');
+});
+el('cppTab').addEventListener('click', () => {
+  el('cppTab').classList.add('active'); el('jsonTab').classList.remove('active'); el('specTab').classList.remove('active');
+  el('cppOutput').classList.remove('hidden'); el('jsonOutput').classList.add('hidden'); el('specOutput').classList.add('hidden');
+});
+el('copyJsonBtn').addEventListener('click', () => copyText(el('jsonOutput').value));
+el('copySpecBtn').addEventListener('click', () => copyText(el('specOutput').value));
+el('copyCppBtn').addEventListener('click', () => copyText(el('cppOutput').value));
+el('downloadBtn').addEventListener('click', () => {
+  const blob = new Blob([el('jsonOutput').value], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${state.sceneName || 'eye_scene'}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+loadPreset('eve_base');
+</script>
+</body>
+</html>
+
+
+
