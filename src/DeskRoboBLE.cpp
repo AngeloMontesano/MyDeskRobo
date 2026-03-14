@@ -35,7 +35,8 @@ enum CmdType : uint8_t {
   CMD_SET_BACKLIGHT = 7,
   CMD_SET_TUNING = 8,
   CMD_SAVE_TUNING = 9,
-  CMD_LOAD_TUNING = 10,`r`n  CMD_FACTORY_RESET = 11,
+  CMD_LOAD_TUNING = 10
+  , CMD_FACTORY_RESET = 11,
 };
 
 struct BleCmd {
@@ -567,6 +568,7 @@ void DeskRoboBLE_Loop() {
     DeskRobo_SetBleConnected(g_device_connected);
   }
 }
+
 
 
 
