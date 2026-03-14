@@ -1,13 +1,8 @@
-#pragma once
+﻿#pragma once
 
 #include "SceneSpec.h"
 
 namespace nse {
-
-struct NamedScene {
-  const char *name;
-  const EyeSceneSpec *scene;
-};
 
 static constexpr AnimationProfile kAnimStill = {
     {false, 4200, 140, 8},
@@ -37,6 +32,12 @@ static constexpr AnimationProfile kAnimExcited = {
     {true, 3000, 120, 10},
     {true, 3, 2, 4, 2, 820, 980, 2000, 2500},
     {false, 0, 1800},
+};
+
+static constexpr AnimationProfile kAnimWow = {
+    {false, 3200, 90, 8},
+    {false, 0, 0, 0, 0, 0, 0, 0, 0},
+    {true, 8, 1500},
 };
 
 static constexpr AnimationProfile kAnimSleepy = {

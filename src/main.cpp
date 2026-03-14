@@ -32,7 +32,7 @@ static void BleInitTask(void *param) {
   (void)param;
   DeskRoboBLE_Init();
   g_ble_ready = true;
-  Serial.println("[BOOT] DeskRobo BLE ready");
+  Serial.println("[BOOT] MyDeskRobo BLE ready");
   vTaskDelete(nullptr);
 }
 
@@ -45,11 +45,11 @@ static void RequestBleInit(const char *reason) {
   const BaseType_t ble_task_ok =
       xTaskCreate(BleInitTask, "ble_init", 12288, nullptr, 1, nullptr);
   if (ble_task_ok == pdPASS) {
-    Serial.printf("[BOOT] DeskRobo BLE init task started (%s)\n",
+    Serial.printf("[BOOT] MyDeskRobo BLE init task started (%s)\n",
                   reason ? reason : "no-reason");
   } else {
     g_ble_init_requested = false;
-    Serial.println("[BOOT] DeskRobo BLE init task failed (BLE disabled)");
+    Serial.println("[BOOT] MyDeskRobo BLE init task failed (BLE disabled)");
   }
 }
 
@@ -134,15 +134,15 @@ void setup() {
   Lvgl_Init();
   Serial.println("[BOOT] LVGL init done");
   DeskRobo_Init();
-  Serial.println("[BOOT] DeskRobo MVP ready");
+  Serial.println("[BOOT] MyDeskRobo MVP ready");
   DeskRoboWeb_Init();
-  Serial.println("[BOOT] DeskRobo Web ready");
+  Serial.println("[BOOT] MyDeskRobo Web ready");
 
   g_boot_ms = millis();
   Serial.println("[BOOT] Waiting up to 60s for WLAN before BLE fallback");
 
   DeskRoboAudio_Init();
-  Serial.println("[BOOT] DeskRobo Audio test ready");
+  Serial.println("[BOOT] MyDeskRobo Audio test ready");
 }
 
 void loop() {

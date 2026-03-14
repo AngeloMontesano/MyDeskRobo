@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <Arduino.h>
 #include <lvgl.h>
@@ -121,6 +121,14 @@ struct RuntimeState {
   int8_t pulse_shift;
   bool blink;
   int16_t blink_height;
+  lv_opa_t output_opa;
+  bool glitch_row_shift;
+  int16_t glitch_row_y;
+  int16_t glitch_row_h;
+  int16_t glitch_row_offset;
+  uint8_t glitch_scanline_count;
+  int16_t glitch_scanline_y[4];
+  int16_t glitch_scanline_h[4];
 };
 
 } // namespace nse
