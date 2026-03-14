@@ -95,6 +95,16 @@ bool parseEmotion(const String &name, DeskRoboEmotion &out) {
   else if (name == "MAIL") out = DESKROBO_EMOTION_MAIL;
   else if (name == "CALL") out = DESKROBO_EMOTION_CALL;
   else if (name == "SHAKE") out = DESKROBO_EMOTION_SHAKE;
+  else if (name.startsWith("ANGRY_")) {
+    const int idx = name.substring(6).toInt();
+    if (idx >= 1 && idx <= 10) out = (DeskRoboEmotion)((int)DESKROBO_EMOTION_ANGRY_1 + (idx - 1));
+    else return false;
+  }
+  else if (name.startsWith("SAD_")) {
+    const int idx = name.substring(4).toInt();
+    if (idx >= 1 && idx <= 10) out = (DeskRoboEmotion)((int)DESKROBO_EMOTION_SAD_1 + (idx - 1));
+    else return false;
+  }
   else return false;
   return true;
 }
@@ -147,6 +157,14 @@ bool parseStyleCode(const String &name, uint8_t &out) {
   }
   if (name == "FLUX") {
     out = (uint8_t)DESKROBO_STYLE_FLUX;
+    return true;
+  }
+  if (name == "ANGRY") {
+    out = (uint8_t)DESKROBO_STYLE_ANGRY;
+    return true;
+  }
+  if (name == "SAD") {
+    out = (uint8_t)DESKROBO_STYLE_SAD;
     return true;
   }
   return false;
@@ -532,6 +550,10 @@ void DeskRoboBLE_Loop() {
       case CMD_SET_STYLE: {
         if (cmd.a == (uint8_t)DESKROBO_STYLE_FLUX) {
           (void)DeskRobo_SetStyleByName("FLUX");
+        } else if (cmd.a == (uint8_t)DESKROBO_STYLE_ANGRY) {
+          (void)DeskRobo_SetStyleByName("ANGRY");
+        } else if (cmd.a == (uint8_t)DESKROBO_STYLE_SAD) {
+          (void)DeskRobo_SetStyleByName("SAD");
         } else {
           (void)DeskRobo_SetStyleByName("EVE_CINEMATIC");
         }

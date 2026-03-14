@@ -84,7 +84,7 @@ Mit CLI-Flags kannst du zentrale Webfrontend-Funktionen direkt ueber BLE senden:
 
 ```powershell
 cd pc_agent
-.\.venv\Scripts\python.exe pc_agent.py --style EVE_COMIC --backlight 70 --status-label on
+.\.venv\Scripts\python.exe pc_agent.py --style EVE --backlight 70 --status-label on
 ```
 
 Weitere Beispiele:
@@ -103,6 +103,6 @@ Weitere Beispiele:
 .\.venv\Scripts\python.exe pc_agent.py --tune drift_amp_px=2 --tune blink_interval_ms=3500
 
 # Rohbefehl senden (CMD-Payload)
-.\.venv\Scripts\python.exe pc_agent.py --cmd "STYLE:EVE_SUBTLE"
+.\.venv\Scripts\python.exe pc_agent.py --cmd "STYLE:ANGRY"
 ```
 

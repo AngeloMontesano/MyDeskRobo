@@ -179,6 +179,10 @@ static FaceStyle to_face_style(DeskRoboFaceStyle style) {
   switch (style) {
     case DESKROBO_STYLE_FLUX:
       return FACE_STYLE_FLUX;
+    case DESKROBO_STYLE_ANGRY:
+      return FACE_STYLE_ANGRY_LAB;
+    case DESKROBO_STYLE_SAD:
+      return FACE_STYLE_SAD_LAB;
     case DESKROBO_STYLE_EVE:
     default:
       return FACE_STYLE_EVE_CINEMATIC;
@@ -189,6 +193,10 @@ static const char *style_name(DeskRoboFaceStyle style) {
   switch (style) {
     case DESKROBO_STYLE_FLUX:
       return "FLUX";
+    case DESKROBO_STYLE_ANGRY:
+      return "ANGRY";
+    case DESKROBO_STYLE_SAD:
+      return "SAD";
     case DESKROBO_STYLE_EVE:
     default:
       return "EVE_CINEMATIC";
@@ -205,6 +213,14 @@ static bool parse_style_name(const char *name, DeskRoboFaceStyle &out) {
   }
   if ((strcmp(name, "FLUX") == 0) || (strcmp(name, "flux") == 0)) {
     out = DESKROBO_STYLE_FLUX;
+    return true;
+  }
+  if ((strcmp(name, "ANGRY") == 0) || (strcmp(name, "angry") == 0)) {
+    out = DESKROBO_STYLE_ANGRY;
+    return true;
+  }
+  if ((strcmp(name, "SAD") == 0) || (strcmp(name, "sad") == 0)) {
+    out = DESKROBO_STYLE_SAD;
     return true;
   }
   return false;
@@ -256,6 +272,19 @@ static bool parse_emotion_name(const char *name, DeskRoboEmotion &out) {
     out = DESKROBO_EMOTION_SHAKE;
     return true;
   }
+  int idx = 0;
+  if (sscanf(name, "ANGRY_%d", &idx) == 1) {
+    if (idx >= 1 && idx <= 10) {
+      out = (DeskRoboEmotion)((int)DESKROBO_EMOTION_ANGRY_1 + (idx - 1));
+      return true;
+    }
+  }
+  if (sscanf(name, "SAD_%d", &idx) == 1) {
+    if (idx >= 1 && idx <= 10) {
+      out = (DeskRoboEmotion)((int)DESKROBO_EMOTION_SAD_1 + (idx - 1));
+      return true;
+    }
+  }
   if (strcmp(name, "IDLE") == 0) {
     out = DESKROBO_EMOTION_IDLE;
     return true;
@@ -287,6 +316,28 @@ static Emotion to_anime(DeskRoboEmotion emotion) {
       return EMOTION_CALL;
     case DESKROBO_EMOTION_SHAKE:
       return EMOTION_SHAKE;
+    case DESKROBO_EMOTION_ANGRY_1:
+    case DESKROBO_EMOTION_ANGRY_2:
+    case DESKROBO_EMOTION_ANGRY_3:
+    case DESKROBO_EMOTION_ANGRY_4:
+    case DESKROBO_EMOTION_ANGRY_5:
+    case DESKROBO_EMOTION_ANGRY_6:
+    case DESKROBO_EMOTION_ANGRY_7:
+    case DESKROBO_EMOTION_ANGRY_8:
+    case DESKROBO_EMOTION_ANGRY_9:
+    case DESKROBO_EMOTION_ANGRY_10:
+      return (Emotion)((int)EMOTION_ANGRY_1 + ((int)emotion - (int)DESKROBO_EMOTION_ANGRY_1));
+    case DESKROBO_EMOTION_SAD_1:
+    case DESKROBO_EMOTION_SAD_2:
+    case DESKROBO_EMOTION_SAD_3:
+    case DESKROBO_EMOTION_SAD_4:
+    case DESKROBO_EMOTION_SAD_5:
+    case DESKROBO_EMOTION_SAD_6:
+    case DESKROBO_EMOTION_SAD_7:
+    case DESKROBO_EMOTION_SAD_8:
+    case DESKROBO_EMOTION_SAD_9:
+    case DESKROBO_EMOTION_SAD_10:
+      return (Emotion)((int)EMOTION_SAD_1 + ((int)emotion - (int)DESKROBO_EMOTION_SAD_1));
     case DESKROBO_EMOTION_IDLE:
     default:
       return EMOTION_IDLE;
@@ -317,6 +368,34 @@ static const char *emotion_name(DeskRoboEmotion emotion) {
       return "CALL";
     case DESKROBO_EMOTION_SHAKE:
       return "SHAKE";
+    case DESKROBO_EMOTION_ANGRY_1:
+    case DESKROBO_EMOTION_ANGRY_2:
+    case DESKROBO_EMOTION_ANGRY_3:
+    case DESKROBO_EMOTION_ANGRY_4:
+    case DESKROBO_EMOTION_ANGRY_5:
+    case DESKROBO_EMOTION_ANGRY_6:
+    case DESKROBO_EMOTION_ANGRY_7:
+    case DESKROBO_EMOTION_ANGRY_8:
+    case DESKROBO_EMOTION_ANGRY_9:
+    case DESKROBO_EMOTION_ANGRY_10: {
+      static char angry_buf[16];
+      snprintf(angry_buf, sizeof(angry_buf), "ANGRY_%d", (int)emotion - (int)DESKROBO_EMOTION_ANGRY_1 + 1);
+      return angry_buf;
+    }
+    case DESKROBO_EMOTION_SAD_1:
+    case DESKROBO_EMOTION_SAD_2:
+    case DESKROBO_EMOTION_SAD_3:
+    case DESKROBO_EMOTION_SAD_4:
+    case DESKROBO_EMOTION_SAD_5:
+    case DESKROBO_EMOTION_SAD_6:
+    case DESKROBO_EMOTION_SAD_7:
+    case DESKROBO_EMOTION_SAD_8:
+    case DESKROBO_EMOTION_SAD_9:
+    case DESKROBO_EMOTION_SAD_10: {
+      static char sad_buf[16];
+      snprintf(sad_buf, sizeof(sad_buf), "SAD_%d", (int)emotion - (int)DESKROBO_EMOTION_SAD_1 + 1);
+      return sad_buf;
+    }
     case DESKROBO_EMOTION_IDLE:
     default:
       return "IDLE";
@@ -561,15 +640,14 @@ bool DeskRobo_LoadTuning() {
   const int gyro_tilt_cooldown_ms =
       s_prefs.getInt("gyro_tilt_cooldown", s_gyro_tilt_cooldown_ms);
   s_prefs.end();
-  switch (face_style) {
-    case (int)DESKROBO_STYLE_FLUX:
-      s_face_style = DESKROBO_STYLE_FLUX;
-      break;
-    case 0:
-    case (int)DESKROBO_STYLE_EVE:
-    default:
-      s_face_style = DESKROBO_STYLE_EVE;
-      break;
+  if (face_style == (int)DESKROBO_STYLE_FLUX) {
+    s_face_style = DESKROBO_STYLE_FLUX;
+  } else if (face_style == (int)DESKROBO_STYLE_ANGRY) {
+    s_face_style = DESKROBO_STYLE_ANGRY;
+  } else if (face_style == (int)DESKROBO_STYLE_SAD) {
+    s_face_style = DESKROBO_STYLE_SAD;
+  } else {
+    s_face_style = DESKROBO_STYLE_EVE;
   }
 
   DeskRobo_SetTuning("drift_amp_px", drift_amp_px);
@@ -843,7 +921,7 @@ void DeskRobo_Loop() {
 
   // EVE idle mood cycle: occasional mood pulse, then back to IDLE.
   if (!s_eye_pair_active && !s_ble_sleep_face_active &&
-      (s_current_priority == 0) && (s_face_style != DESKROBO_STYLE_ROUND) &&
+      (s_current_priority == 0) &&
       ((now - s_last_interaction_ms) >= DESKROBO_IDLE_ROUND_ROBIN_AFTER_MS) &&
       ((now - s_last_idle_round_ms) >= DESKROBO_IDLE_ROUND_ROBIN_INTERVAL_MS)) {
     static const DeskRoboEmotion kIdleRound[] = {

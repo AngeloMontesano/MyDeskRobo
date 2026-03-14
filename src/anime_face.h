@@ -22,16 +22,34 @@ typedef enum {
   EMOTION_MAIL,
   EMOTION_CALL,
   EMOTION_SHAKE,
+  EMOTION_ANGRY_1,
+  EMOTION_ANGRY_2,
+  EMOTION_ANGRY_3,
+  EMOTION_ANGRY_4,
+  EMOTION_ANGRY_5,
+  EMOTION_ANGRY_6,
+  EMOTION_ANGRY_7,
+  EMOTION_ANGRY_8,
+  EMOTION_ANGRY_9,
+  EMOTION_ANGRY_10,
+  EMOTION_SAD_1,
+  EMOTION_SAD_2,
+  EMOTION_SAD_3,
+  EMOTION_SAD_4,
+  EMOTION_SAD_5,
+  EMOTION_SAD_6,
+  EMOTION_SAD_7,
+  EMOTION_SAD_8,
+  EMOTION_SAD_9,
+  EMOTION_SAD_10,
   EMOTION_COUNT
 } Emotion;
 
 typedef enum {
   FACE_STYLE_EVE_CINEMATIC = 0,
   FACE_STYLE_FLUX,
-  FACE_STYLE_ROUND,
-  FACE_STYLE_EVE_SUBTLE,
-  FACE_STYLE_EVE_COMIC,
-  FACE_STYLE_AI
+  FACE_STYLE_ANGRY_LAB,
+  FACE_STYLE_SAD_LAB
 } FaceStyle;
 
 class AnimeFace {
@@ -86,10 +104,8 @@ class AnimeFace {
   Tuning tuning_;
 
   void drawFace();
-  void drawMouth(int16_t cx, int16_t cy, Emotion e, bool blink);
   void drawEye(int16_t cx, int16_t cy, Emotion e, bool isRight, bool blink);
   void drawEyeEVE(int16_t cx, int16_t cy, Emotion e, bool isRight, bool blink);
   void drawEyeFlux(int16_t cx, int16_t cy, Emotion e, bool isRight, bool blink);
-  void drawEyeAI(int16_t cx, int16_t cy, Emotion e, bool isRight, bool blink);
-  void drawEyeRound(int16_t cx, int16_t cy, Emotion e, bool isRight, bool blink);
+  void drawEyeMoodLab(int16_t cx, int16_t cy, Emotion e, bool isRight, bool blink);
 };

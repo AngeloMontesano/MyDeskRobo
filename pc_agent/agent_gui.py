@@ -8,7 +8,7 @@ from tkinter import colorchooser, ttk
 import pc_agent as agent_runtime
 
 
-EMOTIONS = [
+BASE_EMOTIONS = [
     "IDLE",
     "HAPPY",
     "SAD",
@@ -22,10 +22,12 @@ EMOTIONS = [
     "CALL",
     "SHAKE",
 ]
+ANGRY_EMOTIONS = [f"ANGRY_{i}" for i in range(1, 11)]
+SAD_EMOTIONS = [f"SAD_{i}" for i in range(1, 11)]
 
 EVENTS = ["CALL", "MAIL", "TEAMS", "LOUD", "VERY_LOUD", "TILT", "SHAKE", "QUIET"]
 
-STYLES = ["EVE_CINEMATIC", "FLUX"]
+STYLES = ["EVE", "FLUX", "ANGRY", "SAD"]
 
 TUNE_KEYS = [
     "drift_amp_px",
@@ -163,7 +165,7 @@ class AgentApp:
 
         self.emotion_var = tk.StringVar(value="IDLE")
         self.emotion_hold_var = tk.StringVar(value="3500")
-        self.style_var = tk.StringVar(value="EVE_CINEMATIC")
+        self.style_var = tk.StringVar(value="EVE")
         self.backlight_var = tk.IntVar(value=65)
         self.status_label_var = tk.BooleanVar(value=False)
         self.left_eye_var = tk.StringVar(value="IDLE")
@@ -219,24 +221,30 @@ class AgentApp:
         self._build_control_tab(control_tab)
         self._build_tune_tab(tune_tab)
         self._build_log_tab(log_tab)
+        self._refresh_emotion_options()
 
     def _build_control_tab(self, parent: ttk.Frame) -> None:
         style = ttk.LabelFrame(parent, text="Eye Style", padding=10)
         style.pack(fill=tk.X, pady=(0, 8))
-        ttk.Combobox(style, textvariable=self.style_var, values=STYLES, state="readonly", width=18).pack(side=tk.LEFT)
+        self.style_combo = ttk.Combobox(style, textvariable=self.style_var, values=STYLES, state="readonly", width=18)
+        self.style_combo.pack(side=tk.LEFT)
+        self.style_combo.bind("<<ComboboxSelected>>", lambda _e: self._refresh_emotion_options())
         ttk.Button(style, text="Style anwenden", command=self._on_set_style).pack(side=tk.LEFT, padx=8)
 
         emo = ttk.LabelFrame(parent, text="Emotion", padding=10)
         emo.pack(fill=tk.X, pady=(0, 8))
-        ttk.Combobox(emo, textvariable=self.emotion_var, values=EMOTIONS, state="readonly", width=14).pack(side=tk.LEFT)
+        self.emotion_combo = ttk.Combobox(emo, textvariable=self.emotion_var, state="readonly", width=14)
+        self.emotion_combo.pack(side=tk.LEFT)
         ttk.Label(emo, text="Hold (ms)").pack(side=tk.LEFT, padx=(10, 4))
         ttk.Entry(emo, textvariable=self.emotion_hold_var, width=8).pack(side=tk.LEFT)
         ttk.Button(emo, text="Emotion senden", command=self._on_set_emotion).pack(side=tk.LEFT, padx=8)
 
         eyes = ttk.LabelFrame(parent, text="EVE Eyes (Left/Right)", padding=10)
         eyes.pack(fill=tk.X, pady=(0, 8))
-        ttk.Combobox(eyes, textvariable=self.left_eye_var, values=EMOTIONS, state="readonly", width=12).pack(side=tk.LEFT)
-        ttk.Combobox(eyes, textvariable=self.right_eye_var, values=EMOTIONS, state="readonly", width=12).pack(side=tk.LEFT, padx=(6, 0))
+        self.left_eye_combo = ttk.Combobox(eyes, textvariable=self.left_eye_var, state="readonly", width=12)
+        self.left_eye_combo.pack(side=tk.LEFT)
+        self.right_eye_combo = ttk.Combobox(eyes, textvariable=self.right_eye_var, state="readonly", width=12)
+        self.right_eye_combo.pack(side=tk.LEFT, padx=(6, 0))
         ttk.Label(eyes, text="Hold (ms)").pack(side=tk.LEFT, padx=(10, 4))
         ttk.Entry(eyes, textvariable=self.eye_hold_var, width=8).pack(side=tk.LEFT)
         ttk.Button(eyes, text="Eye Pair setzen", command=self._on_set_eyes).pack(side=tk.LEFT, padx=8)
@@ -265,9 +273,53 @@ class AgentApp:
         ttk.Entry(misc, textvariable=self.raw_cmd_var, width=36).pack(side=tk.LEFT, padx=(10, 6))
         ttk.Button(misc, text="Raw CMD senden", command=self._on_raw_cmd).pack(side=tk.LEFT)
 
+    def _style_emotions(self) -> list[str]:
+        style = self.style_var.get().strip()
+        if style == "ANGRY":
+            return list(ANGRY_EMOTIONS)
+        if style == "SAD":
+            return list(SAD_EMOTIONS)
+        return list(BASE_EMOTIONS)
+
+    def _refresh_emotion_options(self) -> None:
+        emos = self._style_emotions()
+        current_emo = self.emotion_var.get().strip()
+        current_left = self.left_eye_var.get().strip()
+        current_right = self.right_eye_var.get().strip()
+        self.emotion_combo.configure(values=emos)
+        self.left_eye_combo.configure(values=emos)
+        self.right_eye_combo.configure(values=emos)
+        self.emotion_var.set(current_emo if current_emo in emos else emos[0])
+        self.left_eye_var.set(current_left if current_left in emos else emos[0])
+        self.right_eye_var.set(current_right if current_right in emos else emos[0])
+
     def _build_tune_tab(self, parent: ttk.Frame) -> None:
-        frame = ttk.LabelFrame(parent, text="Idle Bewegung anpassen", padding=10)
-        frame.pack(fill=tk.BOTH, expand=True)
+        outer = ttk.Frame(parent)
+        outer.pack(fill=tk.BOTH, expand=True)
+
+        canvas = tk.Canvas(outer, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        frame = ttk.LabelFrame(canvas, text="Idle Bewegung anpassen", padding=10)
+        canvas_window = canvas.create_window((0, 0), window=frame, anchor="nw")
+
+        def _sync_scroll_region(_event=None) -> None:
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            canvas.itemconfigure(canvas_window, width=canvas.winfo_width())
+
+        frame.bind("<Configure>", _sync_scroll_region)
+        canvas.bind("<Configure>", _sync_scroll_region)
+
+        top_actions = ttk.Frame(frame)
+        top_actions.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
+        ttk.Button(top_actions, text="Werte anwenden", command=self._on_apply_tune).pack(side=tk.LEFT)
+        ttk.Button(top_actions, text="Augenfarbe anwenden", command=self._on_apply_eye_color).pack(side=tk.LEFT, padx=8)
+        ttk.Button(top_actions, text="Als Standard speichern", command=self._on_save_tune).pack(side=tk.LEFT, padx=8)
+        ttk.Button(top_actions, text="Gespeicherte Werte laden", command=self._on_load_tune).pack(side=tk.LEFT)
 
         groups = [
             (
@@ -340,7 +392,7 @@ class AgentApp:
 
         for idx, (title, keys) in enumerate(groups):
             group = ttk.LabelFrame(frame, text=title, padding=10)
-            group.grid(row=idx // 2, column=idx % 2, sticky="nsew", padx=6, pady=6)
+            group.grid(row=(idx // 2) + 1, column=idx % 2, sticky="nsew", padx=6, pady=6)
             for row, key in enumerate(keys):
                 ttk.Label(group, text=labels.get(key, key)).grid(row=row, column=0, sticky="w", padx=(0, 8), pady=4)
                 ttk.Entry(group, textvariable=self.tune_vars[key], width=16).grid(row=row, column=1, sticky="w", pady=4)
@@ -359,17 +411,10 @@ class AgentApp:
         frame.columnconfigure(1, weight=1)
 
         presets = ttk.Frame(frame)
-        presets.grid(row=3, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        presets.grid(row=4, column=0, columnspan=2, sticky="w", pady=(8, 0))
         ttk.Button(presets, text="Preset Ruhig", command=lambda: self._apply_tune_preset("calm")).pack(side=tk.LEFT)
         ttk.Button(presets, text="Preset Standard", command=lambda: self._apply_tune_preset("balanced")).pack(side=tk.LEFT, padx=8)
         ttk.Button(presets, text="Preset Lebhaft", command=lambda: self._apply_tune_preset("lively")).pack(side=tk.LEFT)
-
-        btns = ttk.Frame(frame)
-        btns.grid(row=4, column=0, columnspan=2, sticky="w", pady=(12, 0))
-        ttk.Button(btns, text="Augenfarbe anwenden", command=self._on_apply_eye_color).pack(side=tk.LEFT)
-        ttk.Button(btns, text="Werte anwenden", command=self._on_apply_tune).pack(side=tk.LEFT, padx=8)
-        ttk.Button(btns, text="Als Standard speichern", command=self._on_save_tune).pack(side=tk.LEFT, padx=8)
-        ttk.Button(btns, text="Gespeicherte Werte laden", command=self._on_load_tune).pack(side=tk.LEFT)
 
     def _build_log_tab(self, parent: ttk.Frame) -> None:
         self.log_text = tk.Text(parent, wrap="word", state="disabled")

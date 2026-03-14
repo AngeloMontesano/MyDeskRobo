@@ -53,10 +53,10 @@ small{opacity:0.6;font-size:0.8rem;display:block;margin-top:8px}
 <div class=card><h3>Emotion</h3><div class=grid id=emo></div></div>
 <div class=card><h3>Eye Style</h3>
 <div class=grid>
-<button onclick="setStyle('EVE_CINEMATIC')">EVE</button>
-<button onclick="setStyle('FLUX')">FLUX</button>
+<select id=styleSel></select>
+<button onclick="applyStyle()">Style anwenden</button>
 </div>
-<small>Style applies instantly.</small>
+<small>Unter ANGRY und SAD waehle dann die passenden Varianten ueber die Emotionen.</small>
 </div>
 <div class=card><h3>Backlight</h3>
 <div style="display:flex;align-items:center;gap:15px">
@@ -146,17 +146,36 @@ small{opacity:0.6;font-size:0.8rem;display:block;margin-top:8px}
 </div>
 </div>
 <script>
-const emos=['IDLE','HAPPY','SAD','ANGRY','WOW','SLEEPY','CONFUSED','EXCITED','DIZZY','MAIL','CALL','SHAKE'];
+const baseEmos=['IDLE','HAPPY','SAD','ANGRY','WOW','SLEEPY','CONFUSED','EXCITED','DIZZY','MAIL','CALL','SHAKE'];
+const angryEmos=Array.from({length:10},(_,i)=>`ANGRY_${i+1}`);
+const sadEmos=Array.from({length:10},(_,i)=>`SAD_${i+1}`);
+const styles=['EVE','FLUX','ANGRY','SAD'];
 const box=document.getElementById('emo');
 const leftSel=document.getElementById('leftEye');
 const rightSel=document.getElementById('rightEye');
+const styleSel=document.getElementById('styleSel');
 const dbgStatusLabel=document.getElementById('dbgStatusLabel');
-emos.forEach(e=>{const b=document.createElement('button');b.textContent=e;b.onclick=()=>setEmo(e);box.appendChild(b);});
-emos.forEach(e=>{const o1=document.createElement('option');o1.value=e;o1.textContent='Left: '+e;leftSel.appendChild(o1);
-                 const o2=document.createElement('option');o2.value=e;o2.textContent='Right: '+e;rightSel.appendChild(o2);});
-leftSel.value='IDLE';rightSel.value='IDLE';
+function currentStyleEmos(){
+  if(styleSel.value==='ANGRY') return angryEmos;
+  if(styleSel.value==='SAD') return sadEmos;
+  return baseEmos;
+}
+function rebuildEmotionUi(){
+  const emos=currentStyleEmos();
+  box.innerHTML='';
+  leftSel.innerHTML='';
+  rightSel.innerHTML='';
+  emos.forEach(e=>{const b=document.createElement('button');b.textContent=e;b.onclick=()=>setEmo(e);box.appendChild(b);});
+  emos.forEach(e=>{const o1=document.createElement('option');o1.value=e;o1.textContent='Left: '+e;leftSel.appendChild(o1);
+                   const o2=document.createElement('option');o2.value=e;o2.textContent='Right: '+e;rightSel.appendChild(o2);});
+  leftSel.value=emos[0]||'IDLE';rightSel.value=emos[0]||'IDLE';
+}
+styles.forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=s.replace('_',' ');styleSel.appendChild(o);});
+styleSel.value='EVE';
+rebuildEmotionUi();
 async function setEmo(name){await fetch('/api/emotion?name='+name+'&hold=3500',{method:'POST'});refresh();}
 async function setStyle(name){await fetch('/api/style?name='+name,{method:'POST'});refresh();}
+async function applyStyle(){await setStyle(styleSel.value);}
 async function setBacklight(){
  const v=parseInt(document.getElementById('bl').value,10);
  await fetch('/api/backlight?value='+v,{method:'POST'});
@@ -253,6 +272,7 @@ async function ota(){const fi=document.getElementById('f');if(!fi.files.length)r
  const r=await fetch('/api/ota',{method:'POST',body:fd});document.getElementById('otaState').textContent=await r.text();}
 async function loopRefresh(){try{await refresh();}catch(e){}setTimeout(loopRefresh, 2000);}
 dbgStatusLabel.addEventListener('change',async()=>{await setDebugStatusLabel(dbgStatusLabel.checked);});
+styleSel.addEventListener('change',rebuildEmotionUi);
 refreshDebug();
 refreshTune();refreshBacklight();refreshAudio();loopRefresh();
 </script></body></html>
@@ -275,7 +295,19 @@ bool parseEmotion(const String &name, DeskRoboEmotion &out) {
     out = DESKROBO_EMOTION_CONFUSED;
   else if (name == "EXCITED")
     out = DESKROBO_EMOTION_EXCITED;
-  else
+  else if (name.startsWith("ANGRY_")) {
+    const int idx = name.substring(6).toInt();
+    if (idx >= 1 && idx <= 10)
+      out = (DeskRoboEmotion)((int)DESKROBO_EMOTION_ANGRY_1 + (idx - 1));
+    else
+      return false;
+  } else if (name.startsWith("SAD_")) {
+    const int idx = name.substring(4).toInt();
+    if (idx >= 1 && idx <= 10)
+      out = (DeskRoboEmotion)((int)DESKROBO_EMOTION_SAD_1 + (idx - 1));
+    else
+      return false;
+  } else
     return false;
   return true;
 }
@@ -318,6 +350,34 @@ const char *emotionToName(DeskRoboEmotion e) {
     return "CONFUSED";
   case DESKROBO_EMOTION_EXCITED:
     return "EXCITED";
+  case DESKROBO_EMOTION_ANGRY_1:
+  case DESKROBO_EMOTION_ANGRY_2:
+  case DESKROBO_EMOTION_ANGRY_3:
+  case DESKROBO_EMOTION_ANGRY_4:
+  case DESKROBO_EMOTION_ANGRY_5:
+  case DESKROBO_EMOTION_ANGRY_6:
+  case DESKROBO_EMOTION_ANGRY_7:
+  case DESKROBO_EMOTION_ANGRY_8:
+  case DESKROBO_EMOTION_ANGRY_9:
+  case DESKROBO_EMOTION_ANGRY_10: {
+    static char angry_buf[16];
+    snprintf(angry_buf, sizeof(angry_buf), "ANGRY_%d", (int)e - (int)DESKROBO_EMOTION_ANGRY_1 + 1);
+    return angry_buf;
+  }
+  case DESKROBO_EMOTION_SAD_1:
+  case DESKROBO_EMOTION_SAD_2:
+  case DESKROBO_EMOTION_SAD_3:
+  case DESKROBO_EMOTION_SAD_4:
+  case DESKROBO_EMOTION_SAD_5:
+  case DESKROBO_EMOTION_SAD_6:
+  case DESKROBO_EMOTION_SAD_7:
+  case DESKROBO_EMOTION_SAD_8:
+  case DESKROBO_EMOTION_SAD_9:
+  case DESKROBO_EMOTION_SAD_10: {
+    static char sad_buf[16];
+    snprintf(sad_buf, sizeof(sad_buf), "SAD_%d", (int)e - (int)DESKROBO_EMOTION_SAD_1 + 1);
+    return sad_buf;
+  }
   case DESKROBO_EMOTION_IDLE:
   default:
     return "IDLE";
