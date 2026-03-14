@@ -12,15 +12,16 @@
 *.hex
 *.uf2
 *.lst
+compile_commands.json
 
 # ----------------------------
-# VS Code
+# VS Code / local tooling
 # ----------------------------
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
 !.vscode/tasks.json
-.claude
+/.claude/
 
 # C/C++ extension temp files
 .vscode/.browse.c_cpp.db*

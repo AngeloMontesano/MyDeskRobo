@@ -50,10 +50,10 @@ TUNE_KEYS = [
 ]
 
 TUNE_DEFAULTS = {
-    "drift_amp_px": "3",
-    "saccade_amp_px": "6",
-    "saccade_min_ms": "1400",
-    "saccade_max_ms": "3800",
+    "drift_amp_px": "2",
+    "saccade_amp_px": "3",
+    "saccade_min_ms": "2600",
+    "saccade_max_ms": "5200",
     "blink_interval_ms": "3600",
     "blink_duration_ms": "120",
     "double_blink_chance_pct": "20",
@@ -525,7 +525,7 @@ class AgentApp:
                 "gyro_tilt_xy_pct": 72, "gyro_tilt_z_pct": 74, "gyro_tilt_cooldown_ms": 2800,
             },
             "balanced": {
-                "drift_amp_px": 2, "saccade_amp_px": 5, "saccade_min_ms": 1400, "saccade_max_ms": 3800,
+                "drift_amp_px": 2, "saccade_amp_px": 3, "saccade_min_ms": 2600, "saccade_max_ms": 5200,
                 "blink_interval_ms": 3600, "blink_duration_ms": 120, "double_blink_chance_pct": 20,
                 "glow_pulse_amp": 6, "glow_pulse_period_ms": 2600, "shake_amp_px": 24, "shake_period_ms": 700,
                 "sleep_delay_min": 15, "display_off_delay_min": 30,
@@ -672,6 +672,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
 
 

@@ -31,10 +31,10 @@ using namespace nse;
 namespace {
 
 struct NextgenTuning {
-  int drift_amp_px = 3;
-  int saccade_amp_px = 6;
-  int saccade_min_ms = 1400;
-  int saccade_max_ms = 3800;
+  int drift_amp_px = 2;
+  int saccade_amp_px = 3;
+  int saccade_min_ms = 2600;
+  int saccade_max_ms = 5200;
   int blink_interval_ms = 3600;
   int blink_duration_ms = 120;
   int double_blink_chance_pct = 20;
@@ -108,11 +108,12 @@ static constexpr uint8_t kScreensaverDimPct = 35;
 static constexpr DeskRoboEmotion kIdleRound[] = {
     DESKROBO_EMOTION_HAPPY,
     DESKROBO_EMOTION_SAD,
+    DESKROBO_EMOTION_ANGRY_SOFT,
     DESKROBO_EMOTION_ANGRY,
+    DESKROBO_EMOTION_ANGRY_HARD,
     DESKROBO_EMOTION_WOW,
     DESKROBO_EMOTION_SLEEPY,
     DESKROBO_EMOTION_CONFUSED,
-    DESKROBO_EMOTION_SHAKE,
     DESKROBO_EMOTION_WINK,
     DESKROBO_EMOTION_XX,
     DESKROBO_EMOTION_GLITCH,
@@ -743,6 +744,8 @@ void DeskRobo_SetBleConnected(bool connected) {
   g_ble_connected = connected;
   if (connected) mark_interaction(millis());
 }
+
+
 
 
 
