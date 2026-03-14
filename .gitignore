@@ -20,6 +20,7 @@
 !.vscode/settings.json
 !.vscode/extensions.json
 !.vscode/tasks.json
+.claude/*
 
 # C/C++ extension temp files
 .vscode/.browse.c_cpp.db*
@@ -70,3 +71,14 @@ desktop.ini
 logs/
 
 *ESP32-S3-LCD-1.85-Demo/
+
+# ----------------------------
+# Local agent / release artifacts
+# ----------------------------
+pc_agent/build/
+pc_agent/dist/
+pc_agent/*.spec.bak
+*.bak
+
+# Local scene exports
+*.renderer_spec.json
