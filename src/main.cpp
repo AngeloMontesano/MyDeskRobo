@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <WiFi.h>
 
 #include "LVGL_Arduino/BAT_Driver.h"
 #include "LVGL_Arduino/Display_ST77916.h"
@@ -11,7 +10,6 @@
 #include "DeskRoboAudio.h"
 #include "DeskRoboBLE.h"
 #include "DeskRoboMVP.h"
-#include "DeskRoboWeb.h"
 
 #ifndef DESKROBO_ENABLE_GYRO
 #define DESKROBO_ENABLE_GYRO 0
@@ -23,10 +21,6 @@
 
 static volatile bool g_ble_ready = false;
 static volatile bool g_ble_init_requested = false;
-static bool g_boot_wifi_policy_done = false;
-static uint32_t g_boot_ms = 0;
-
-static constexpr uint32_t kBootWifiGraceMs = 60UL * 1000UL;
 
 static void BleInitTask(void *param) {
   (void)param;
@@ -36,7 +30,7 @@ static void BleInitTask(void *param) {
   vTaskDelete(nullptr);
 }
 
-static void RequestBleInit(const char *reason) {
+static void RequestBleInit() {
   if (g_ble_ready || g_ble_init_requested) {
     return;
   }
@@ -45,35 +39,11 @@ static void RequestBleInit(const char *reason) {
   const BaseType_t ble_task_ok =
       xTaskCreate(BleInitTask, "ble_init", 12288, nullptr, 1, nullptr);
   if (ble_task_ok == pdPASS) {
-    Serial.printf("[BOOT] MyDeskRobo BLE init task started (%s)\n",
-                  reason ? reason : "no-reason");
+    Serial.println("[BOOT] MyDeskRobo BLE init task started");
   } else {
     g_ble_init_requested = false;
     Serial.println("[BOOT] MyDeskRobo BLE init task failed (BLE disabled)");
   }
-}
-
-static void ApplyBootConnectivityPolicy() {
-  if (g_boot_wifi_policy_done || g_ble_ready || g_ble_init_requested) {
-    return;
-  }
-
-  if (WiFi.status() == WL_CONNECTED) {
-    g_boot_wifi_policy_done = true;
-    Serial.println("[BOOT] WLAN connected within 60s -> BLE start");
-    RequestBleInit("wlan-connected");
-    return;
-  }
-
-  const uint32_t elapsed_ms = millis() - g_boot_ms;
-  if (elapsed_ms < kBootWifiGraceMs) {
-    return;
-  }
-
-  g_boot_wifi_policy_done = true;
-  Serial.println("[BOOT] WLAN timeout after 60s -> WiFi off + BLE start");
-  DeskRoboWeb_ShutdownWiFi();
-  RequestBleInit("wlan-timeout");
 }
 
 static void Gyro_SafeProbe() {
@@ -102,7 +72,6 @@ void setup() {
   delay(200);
   Serial.println("[BOOT] setup start");
 
-  // Keep board power rail enabled in minimal display-only bring-up.
   pinMode(7, OUTPUT);
   digitalWrite(7, HIGH);
   delay(20);
@@ -135,21 +104,14 @@ void setup() {
   Serial.println("[BOOT] LVGL init done");
   DeskRobo_Init();
   Serial.println("[BOOT] MyDeskRobo MVP ready");
-  DeskRoboWeb_Init();
-  Serial.println("[BOOT] MyDeskRobo Web ready");
-
-  g_boot_ms = millis();
-  Serial.println("[BOOT] Waiting up to 60s for WLAN before BLE fallback");
-
   DeskRoboAudio_Init();
   Serial.println("[BOOT] MyDeskRobo Audio test ready");
+  RequestBleInit();
 }
 
 void loop() {
   DeskRobo_Loop();
   DeskRoboAudio_Loop();
-  DeskRoboWeb_Loop();
-  ApplyBootConnectivityPolicy();
   if (g_ble_ready) {
     DeskRoboBLE_Loop();
   }

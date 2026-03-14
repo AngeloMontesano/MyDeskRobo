@@ -35,7 +35,7 @@ enum CmdType : uint8_t {
   CMD_SET_BACKLIGHT = 7,
   CMD_SET_TUNING = 8,
   CMD_SAVE_TUNING = 9,
-  CMD_LOAD_TUNING = 10,
+  CMD_LOAD_TUNING = 10,`r`n  CMD_FACTORY_RESET = 11,
 };
 
 struct BleCmd {
@@ -87,6 +87,8 @@ bool parseEmotion(const String &name, DeskRoboEmotion &out) {
   else if (name == "HAPPY") out = DESKROBO_EMOTION_HAPPY;
   else if (name == "SAD") out = DESKROBO_EMOTION_SAD;
   else if (name == "ANGRY") out = DESKROBO_EMOTION_ANGRY;
+  else if (name == "ANGRY_SOFT") out = DESKROBO_EMOTION_ANGRY_SOFT;
+  else if (name == "ANGRY_HARD") out = DESKROBO_EMOTION_ANGRY_HARD;
   else if (name == "WOW") out = DESKROBO_EMOTION_WOW;
   else if (name == "SLEEPY") out = DESKROBO_EMOTION_SLEEPY;
   else if (name == "CONFUSED") out = DESKROBO_EMOTION_CONFUSED;
@@ -565,3 +567,6 @@ void DeskRoboBLE_Loop() {
     DeskRobo_SetBleConnected(g_device_connected);
   }
 }
+
+
+

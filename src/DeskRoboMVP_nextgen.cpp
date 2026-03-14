@@ -1,7 +1,6 @@
 #include "DeskRoboMVP.h"
 
 #include <Preferences.h>
-#include <WiFi.h>
 #include <lvgl.h>
 #include <math.h>
 #include <stdlib.h>
@@ -32,8 +31,8 @@ using namespace nse;
 namespace {
 
 struct NextgenTuning {
-  int drift_amp_px = 2;
-  int saccade_amp_px = 5;
+  int drift_amp_px = 3;
+  int saccade_amp_px = 6;
   int saccade_min_ms = 1400;
   int saccade_max_ms = 3800;
   int blink_interval_ms = 3600;
@@ -43,8 +42,8 @@ struct NextgenTuning {
   int glow_pulse_period_ms = 2600;
   int shake_amp_px = 24;
   int shake_period_ms = 700;
-  int sleep_delay_min = 15;
-  int display_off_delay_min = 30;
+  int sleep_delay_min = 10;
+  int display_off_delay_min = 15;
   int eye_color_r = 15;
   int eye_color_g = 218;
   int eye_color_b = 255;
@@ -67,12 +66,10 @@ struct GlitchFxState {
   int16_t scan_h[4] = {0, 0, 0, 0};
 };
 
-LayerRenderer *g_renderer = nullptr;
-LayerRenderer *g_glitch_red_renderer = nullptr;
-LayerRenderer *g_glitch_cyan_renderer = nullptr;
-lv_obj_t *g_canvas = nullptr;
-lv_obj_t *g_glitch_red_canvas = nullptr;
-lv_obj_t *g_glitch_cyan_canvas = nullptr;
+LayerRenderer *g_left_renderer = nullptr;
+LayerRenderer *g_right_renderer = nullptr;
+lv_obj_t *g_left_canvas = nullptr;
+lv_obj_t *g_right_canvas = nullptr;
 lv_obj_t *g_status_label = nullptr;
 lv_obj_t *g_scene_label = nullptr;
 lv_obj_t *g_sleep_labels[3] = {nullptr, nullptr, nullptr};
@@ -103,18 +100,22 @@ bool g_display_dimmed = false;
 uint8_t g_backlight_before_sleep = 15;
 uint8_t g_idle_round_index = 0;
 
-static constexpr uint32_t kIdleRoundRobinAfterMs = 60UL * 1000UL;
-static constexpr uint32_t kIdleRoundRobinIntervalMs = 45UL * 1000UL;
-static constexpr uint32_t kIdleRoundRobinShowMs = 6000UL;
+static constexpr uint32_t kIdleRoundRobinAfterMs = 20UL * 1000UL;
+static constexpr uint32_t kIdleRoundRobinIntervalMs = 15UL * 1000UL;
+static constexpr uint32_t kIdleRoundRobinShowMs = 8000UL;
 static constexpr uint8_t kIdleRoundRobinPriority = 5;
 static constexpr uint8_t kScreensaverDimPct = 35;
 static constexpr DeskRoboEmotion kIdleRound[] = {
-    DESKROBO_EMOTION_IDLE,
     DESKROBO_EMOTION_HAPPY,
-    DESKROBO_EMOTION_IDLE,
+    DESKROBO_EMOTION_SAD,
+    DESKROBO_EMOTION_ANGRY,
     DESKROBO_EMOTION_WOW,
-    DESKROBO_EMOTION_IDLE,
+    DESKROBO_EMOTION_SLEEPY,
     DESKROBO_EMOTION_CONFUSED,
+    DESKROBO_EMOTION_SHAKE,
+    DESKROBO_EMOTION_WINK,
+    DESKROBO_EMOTION_XX,
+    DESKROBO_EMOTION_GLITCH,
 };
 
 const char *emotion_name(DeskRoboEmotion emotion) {
@@ -122,6 +123,8 @@ const char *emotion_name(DeskRoboEmotion emotion) {
     case DESKROBO_EMOTION_HAPPY: return "HAPPY";
     case DESKROBO_EMOTION_SAD: return "SAD";
     case DESKROBO_EMOTION_ANGRY: return "ANGRY";
+    case DESKROBO_EMOTION_ANGRY_SOFT: return "ANGRY_SOFT";
+    case DESKROBO_EMOTION_ANGRY_HARD: return "ANGRY_HARD";
     case DESKROBO_EMOTION_WOW: return "WOW";
     case DESKROBO_EMOTION_SLEEPY: return "SLEEPY";
     case DESKROBO_EMOTION_CONFUSED: return "CONFUSED";
@@ -144,8 +147,7 @@ lv_color_t eye_color() {
 }
 
 bool wifi_session_active() {
-  if (WiFi.status() == WL_CONNECTED) return true;
-  return WiFi.softAPgetStationNum() > 0;
+  return false;
 }
 
 uint8_t wake_backlight_level() {
@@ -169,6 +171,8 @@ const EyeSceneSpec &scene_for_emotion(DeskRoboEmotion emotion, DeskRoboFaceStyle
   switch (emotion) {
     case DESKROBO_EMOTION_HAPPY: return kEveHappyScene;
     case DESKROBO_EMOTION_SAD: return kEveSadScene;
+    case DESKROBO_EMOTION_ANGRY_SOFT: return kEveAngrySoftScene;
+    case DESKROBO_EMOTION_ANGRY_HARD: return kEveAngryHardScene;
     case DESKROBO_EMOTION_ANGRY: return kEveAngryHardScene;
     case DESKROBO_EMOTION_WOW: return kEveWowScene;
     case DESKROBO_EMOTION_SLEEPY: return kEveSleepyScene;
@@ -293,8 +297,6 @@ RuntimeState make_runtime_state(const EyeSceneSpec &scene, lv_color_t color, boo
 
 void update_glitch_fx(const EyeSceneSpec &scene) {
   if (!is_glitch_scene(scene)) {
-    if (g_glitch_cyan_canvas) lv_obj_add_flag(g_glitch_cyan_canvas, LV_OBJ_FLAG_HIDDEN);
-    if (g_glitch_red_canvas) lv_obj_add_flag(g_glitch_red_canvas, LV_OBJ_FLAG_HIDDEN);
     reset_glitch_fx();
     return;
   }
@@ -326,17 +328,6 @@ void update_glitch_fx(const EyeSceneSpec &scene) {
     }
   }
 
-  if (g_glitch_fx.split_frames > 0) {
-    lv_obj_clear_flag(g_glitch_cyan_canvas, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_clear_flag(g_glitch_red_canvas, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_set_pos(g_glitch_cyan_canvas, -4, 0);
-    lv_obj_set_pos(g_glitch_red_canvas, 2, 0);
-    lv_obj_set_style_opa(g_glitch_cyan_canvas, LV_OPA_70, 0);
-    lv_obj_set_style_opa(g_glitch_red_canvas, LV_OPA_90, 0);
-  } else {
-    lv_obj_add_flag(g_glitch_cyan_canvas, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_flag(g_glitch_red_canvas, LV_OBJ_FLAG_HIDDEN);
-  }
 }
 
 void update_sleep_overlay(const EyeSceneSpec &left_scene, const EyeSceneSpec &right_scene) {
@@ -419,26 +410,23 @@ void maybe_expire_states() {
   }
 }
 
-void init_canvas(lv_obj_t *canvas) {
+void init_canvas(lv_obj_t *canvas, lv_coord_t x, lv_coord_t width) {
   lv_obj_remove_style_all(canvas);
   lv_obj_clear_flag(canvas, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_size(canvas, EXAMPLE_LCD_WIDTH, EXAMPLE_LCD_HEIGHT);
-  lv_obj_set_pos(canvas, 0, 0);
+  lv_obj_set_size(canvas, width, kEyeViewportHeight);
+  lv_obj_set_pos(canvas, x, 86);
   lv_obj_set_style_bg_color(canvas, lv_color_hex(0x06080D), 0);
   lv_obj_set_style_bg_opa(canvas, LV_OPA_COVER, 0);
 }
 
 void create_ui() {
-  g_glitch_cyan_canvas = lv_canvas_create(lv_scr_act());
-  init_canvas(g_glitch_cyan_canvas);
-  lv_obj_add_flag(g_glitch_cyan_canvas, LV_OBJ_FLAG_HIDDEN);
+  const lv_coord_t half_w = EXAMPLE_LCD_WIDTH / 2;
 
-  g_glitch_red_canvas = lv_canvas_create(lv_scr_act());
-  init_canvas(g_glitch_red_canvas);
-  lv_obj_add_flag(g_glitch_red_canvas, LV_OBJ_FLAG_HIDDEN);
+  g_left_canvas = lv_canvas_create(lv_scr_act());
+  init_canvas(g_left_canvas, 0, half_w);
 
-  g_canvas = lv_canvas_create(lv_scr_act());
-  init_canvas(g_canvas);
+  g_right_canvas = lv_canvas_create(lv_scr_act());
+  init_canvas(g_right_canvas, half_w, half_w);
 
   g_scene_label = lv_label_create(lv_scr_act());
   lv_obj_set_style_text_color(g_scene_label, lv_color_make(0x6A, 0xD7, 0xF5), 0);
@@ -489,12 +477,10 @@ void create_ui() {
   lv_obj_add_flag(g_confused_label, LV_OBJ_FLAG_HIDDEN);
   lv_obj_set_pos(g_confused_label, 250, 28);
 
-  static LayerRenderer renderer(g_canvas);
-  static LayerRenderer glitch_red_renderer(g_glitch_red_canvas);
-  static LayerRenderer glitch_cyan_renderer(g_glitch_cyan_canvas);
-  g_renderer = &renderer;
-  g_glitch_red_renderer = &glitch_red_renderer;
-  g_glitch_cyan_renderer = &glitch_cyan_renderer;
+  static LayerRenderer left_renderer(g_left_canvas);
+  static LayerRenderer right_renderer(g_right_canvas);
+  g_left_renderer = &left_renderer;
+  g_right_renderer = &right_renderer;
 }
 
 void render_active() {
@@ -507,31 +493,25 @@ void render_active() {
   update_sleep_overlay(left_scene, right_scene);
   update_confused_overlay(left_scene, right_scene);
 
-  lv_color_t base_eye_color = eye_color();
-  if (g_eye_pair_active) {
-    RuntimeState left_state = make_runtime_state(left_scene, base_eye_color, is_glitch_scene(left_scene));
-    RuntimeState right_state = make_runtime_state(right_scene, base_eye_color, is_glitch_scene(right_scene));
-    g_renderer->render_pair(left_scene, left_state, right_scene, right_state);
-    return;
+  lv_color_t left_color = eye_color();
+  lv_color_t right_color = left_color;
+  const bool glitch_active = (g_glitch_fx.row_frames > 0) ||
+                             (g_glitch_fx.flicker_frames > 0) ||
+                             (g_glitch_fx.scan_frames > 0);
+  if (is_glitch_scene(left_scene) && glitch_active) {
+    left_color = lv_color_make(0xFF, 0x00, 0x40);
+  }
+  if (is_glitch_scene(right_scene) && glitch_active) {
+    right_color = lv_color_make(0xFF, 0x00, 0x40);
   }
 
-  if (is_glitch_scene(left_scene)) {
-    const bool glitch_active = (g_glitch_fx.row_frames > 0) || (g_glitch_fx.flicker_frames > 0) || (g_glitch_fx.split_frames > 0) || (g_glitch_fx.scan_frames > 0);
-    const RuntimeState main_state = make_runtime_state(left_scene, glitch_active ? lv_color_make(0xFF, 0x00, 0x40) : base_eye_color, true);
-    const RuntimeState cyan_state = make_runtime_state(left_scene, lv_color_make(0x00, 0xFF, 0xFF), true);
-    const RuntimeState red_state = make_runtime_state(left_scene, lv_color_make(0xFF, 0x00, 0x40), true);
-    g_renderer->render(left_scene, main_state);
-    if (g_glitch_fx.split_frames > 0) {
-      lv_obj_clear_flag(g_glitch_cyan_canvas, LV_OBJ_FLAG_HIDDEN);
-      lv_obj_clear_flag(g_glitch_red_canvas, LV_OBJ_FLAG_HIDDEN);
-      g_glitch_cyan_renderer->render(left_scene, cyan_state);
-      g_glitch_red_renderer->render(left_scene, red_state);
-    }
-    return;
+  RuntimeState left_state = make_runtime_state(left_scene, left_color, is_glitch_scene(left_scene));
+  RuntimeState right_state = make_runtime_state(right_scene, right_color, is_glitch_scene(right_scene));
+  const bool left_ok = g_left_renderer && g_left_renderer->render_eye(left_scene, left_state, false);
+  const bool right_ok = g_right_renderer && g_right_renderer->render_eye(right_scene, right_state, true);
+  if (!left_ok || !right_ok) {
+    update_scene_label(g_eye_pair_active ? "render_fail_pair" : "render_fail");
   }
-
-  RuntimeState state = make_runtime_state(left_scene, base_eye_color, false);
-  g_renderer->render(left_scene, state);
 }
 
 bool parse_style_name(const char *name, DeskRoboFaceStyle &out) {
@@ -572,6 +552,26 @@ void load_prefs_values() {
   g_tuning.gyro_tilt_z_pct = g_prefs.getInt("gyro_tilt_z_pct", g_tuning.gyro_tilt_z_pct);
   g_tuning.gyro_tilt_cooldown_ms = g_prefs.getInt("gyro_tilt_cooldown", g_tuning.gyro_tilt_cooldown_ms);
   g_prefs.end();
+
+  g_tuning.drift_amp_px = constrain(g_tuning.drift_amp_px, 1, 10);
+  g_tuning.saccade_amp_px = constrain(g_tuning.saccade_amp_px, 0, 16);
+  g_tuning.saccade_min_ms = constrain(g_tuning.saccade_min_ms, 250, 15000);
+  g_tuning.saccade_max_ms = constrain(g_tuning.saccade_max_ms, g_tuning.saccade_min_ms, 20000);
+  g_tuning.blink_interval_ms = constrain(g_tuning.blink_interval_ms, 600, 15000);
+  g_tuning.blink_duration_ms = constrain(g_tuning.blink_duration_ms, 40, 1500);
+  g_tuning.double_blink_chance_pct = constrain(g_tuning.double_blink_chance_pct, 0, 100);
+  g_tuning.glow_pulse_amp = constrain(g_tuning.glow_pulse_amp, 0, 24);
+  g_tuning.glow_pulse_period_ms = constrain(g_tuning.glow_pulse_period_ms, 400, 15000);
+  g_tuning.shake_amp_px = constrain(g_tuning.shake_amp_px, 0, 80);
+  g_tuning.shake_period_ms = constrain(g_tuning.shake_period_ms, 120, 4000);
+  g_tuning.sleep_delay_min = constrain(g_tuning.sleep_delay_min, 1, 720);
+  g_tuning.display_off_delay_min = constrain(g_tuning.display_off_delay_min, g_tuning.sleep_delay_min, 720);
+  g_tuning.eye_color_r = constrain(g_tuning.eye_color_r, 0, 255);
+  g_tuning.eye_color_g = constrain(g_tuning.eye_color_g, 0, 255);
+  g_tuning.eye_color_b = constrain(g_tuning.eye_color_b, 0, 255);
+  g_tuning.gyro_tilt_xy_pct = constrain(g_tuning.gyro_tilt_xy_pct, 0, 100);
+  g_tuning.gyro_tilt_z_pct = constrain(g_tuning.gyro_tilt_z_pct, 0, 100);
+  g_tuning.gyro_tilt_cooldown_ms = constrain(g_tuning.gyro_tilt_cooldown_ms, 100, 15000);
 }
 void apply_event_emotion(DeskRoboEmotion emotion, uint8_t priority, uint32_t ttl_ms) {
   const uint32_t now = millis();
@@ -743,6 +743,17 @@ void DeskRobo_SetBleConnected(bool connected) {
   g_ble_connected = connected;
   if (connected) mark_interaction(millis());
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 

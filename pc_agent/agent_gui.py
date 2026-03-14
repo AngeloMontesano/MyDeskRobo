@@ -50,8 +50,8 @@ TUNE_KEYS = [
 ]
 
 TUNE_DEFAULTS = {
-    "drift_amp_px": "2",
-    "saccade_amp_px": "5",
+    "drift_amp_px": "3",
+    "saccade_amp_px": "6",
     "saccade_min_ms": "1400",
     "saccade_max_ms": "3800",
     "blink_interval_ms": "3600",
@@ -61,8 +61,8 @@ TUNE_DEFAULTS = {
     "glow_pulse_period_ms": "2600",
     "shake_amp_px": "24",
     "shake_period_ms": "700",
-    "sleep_delay_min": "15",
-    "display_off_delay_min": "30",
+    "sleep_delay_min": "10",
+    "display_off_delay_min": "15",
     "eye_color_r": "15",
     "eye_color_g": "218",
     "eye_color_b": "255",
@@ -672,4 +672,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+
 

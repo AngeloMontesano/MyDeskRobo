@@ -7,6 +7,8 @@ typedef enum {
   DESKROBO_EMOTION_HAPPY,
   DESKROBO_EMOTION_SAD,
   DESKROBO_EMOTION_ANGRY,
+  DESKROBO_EMOTION_ANGRY_SOFT,
+  DESKROBO_EMOTION_ANGRY_HARD,
   DESKROBO_EMOTION_WOW,
   DESKROBO_EMOTION_SLEEPY,
   DESKROBO_EMOTION_CONFUSED,
@@ -52,5 +54,3 @@ const char *DeskRobo_GetStyleName();
 void DeskRobo_SetStatusLabelVisible(bool visible);
 bool DeskRobo_GetStatusLabelVisible();
 void DeskRobo_SetBleConnected(bool connected);
-
-

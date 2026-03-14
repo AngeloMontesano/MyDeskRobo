@@ -1,22 +1,24 @@
-﻿#pragma once
+#pragma once
 
 #include "SceneSpec.h"
 
 namespace nse {
 
+static constexpr int16_t kEyeViewportY = 60;
+static constexpr int16_t kEyeViewportHeight = 240;
+
 class LayerRenderer {
  public:
   explicit LayerRenderer(lv_obj_t *canvas) : canvas_(canvas) {}
 
-  void render(const EyeSceneSpec &scene, const RuntimeState &state);
-  void render_pair(const EyeSceneSpec &left_scene, const RuntimeState &left_state,
-                   const EyeSceneSpec &right_scene, const RuntimeState &right_state);
+  bool render_eye(const EyeSceneSpec &scene, const RuntimeState &state, bool right_eye);
 
  private:
   lv_obj_t *canvas_;
   uint8_t *alpha_buf_ = nullptr;
   int16_t width_ = 0;
   int16_t height_ = 0;
+  int16_t origin_x_ = 0;
 
   bool ensure_buffer(int16_t width, int16_t height);
   void clear_buffer();

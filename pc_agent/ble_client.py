@@ -391,3 +391,4 @@ class BleClient:
                 self._emit_status("retry", f"Neuversuch in {BLE_RECONNECT_DELAY_S}s: {exc}")
                 LOG.warning("reconnect retry in %ss: %s", BLE_RECONNECT_DELAY_S, exc)
                 await asyncio.sleep(BLE_RECONNECT_DELAY_S)
+
