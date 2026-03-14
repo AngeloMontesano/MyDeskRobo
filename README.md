@@ -1,6 +1,6 @@
-# DeskRobo (Waveshare ESP32-S3-LCD-1.85)
+# MyDeskRobo (Waveshare ESP32-S3-LCD-1.85)
 
-DeskRobo is an ESP32 desk companion with an animated LVGL face, controllable over Web API and BLE.
+MyDeskRobo is an ESP32 desk companion with an animated LVGL face, controllable over Web API and BLE.
 
 This repository contains:
 - firmware (`src/*`) for the board
@@ -9,9 +9,9 @@ This repository contains:
 ## Features
 
 - 360x360 display (ST77916) with animated eye face
-- 18 emotions and temporary eye pair override
-- selectable face styles: `EVE`, `PLAYFUL`
-- web control UI in AP mode (`DeskRobo-Setup`)
+- core emotions plus `WINK`, `XX`, `GLITCH` and temporary eye pair override
+- EVE-only face pipeline with web, BLE and PC agent control
+- web control UI in AP mode (`MyDeskRobo-Setup`)
 - HTTP API for emotions, events, style, backlight, tuning
 - OTA firmware upload via browser (`/api/ota`)
 - BLE command path (for PC agent)
@@ -19,7 +19,7 @@ This repository contains:
 
 ## Connectivity Policy
 
-- On boot, DeskRobo waits up to 60 seconds for STA WLAN connection.
+- On boot, MyDeskRobo waits up to 60 seconds for STA WLAN connection.
 - If WLAN connects within 60s: BLE starts and Wi-Fi stays active.
 - If WLAN does not connect within 60s: Wi-Fi (AP+STA) is turned off and BLE starts.
 - AP auto-off is still active: AP is disabled after 9 minutes when no AP clients are connected.
@@ -39,24 +39,24 @@ This repository contains:
 $env:PYTHONIOENCODING='utf-8'
 $env:PYTHONUTF8='1'
 chcp 65001 > $null
-& "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run -t upload
+& "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run -e esp32-s3-mydeskrobo-full -t upload
 ```
 
 2. Connect to AP (within the first 60s after boot if no STA WLAN is connected):
-- SSID: `DeskRobo-Setup`
+- SSID: `MyDeskRobo-Setup`
 - Password: `deskrobo123`
 
 3. Open:
 - `http://192.168.4.1/`
 
-Note: if Wi-Fi timed out and was turned off, reboot DeskRobo to reopen the setup AP window.
+Note: if Wi-Fi timed out and was turned off, reboot MyDeskRobo to reopen the setup AP window.
 
 ## Main API Endpoints
 
 - `GET /api/status`
 - `POST /api/emotion?name=HAPPY&hold=3500`
 - `POST /api/eyes?left=IDLE&right=WINK&hold=5000`
-- `POST /api/style?name=EVE|PLAYFUL`
+- `POST /api/style?name=EVE`
 - `GET /api/backlight`
 - `POST /api/backlight?value=65`
 - `GET /api/tune/get`
@@ -68,7 +68,7 @@ Note: if Wi-Fi timed out and was turned off, reboot DeskRobo to reopen the setup
 
 ## Documentation
 
-- User/developer quickstart: [DESKROBO_QUICKSTART.md](DESKROBO_QUICKSTART.md)
+- User/developer quickstart: [MYDESKROBO_QUICKSTART.md](MYDESKROBO_QUICKSTART.md)
 - Technical documentation: [docs/TECHNICAL_DOC.md](docs/TECHNICAL_DOC.md)
 - LLM/Agent implementation guide: [docs/LLM_AGENT_GUIDE.md](docs/LLM_AGENT_GUIDE.md)
 - PC agent details: [pc_agent/README.md](pc_agent/README.md)
@@ -80,4 +80,4 @@ Note: if Wi-Fi timed out and was turned off, reboot DeskRobo to reopen the setup
 
 ## License
 
-No license file is set yet. Add a `LICENSE` file before public release.
+Add a `LICENSE` file before public release.

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DeskRobo Eye Designer</title>
+<title>MyDeskRobo Eye Designer</title>
 <style>
 :root {
   --bg: #0b1018;
@@ -144,7 +144,7 @@ canvas {
 <div class="app">
   <div class="header panel">
     <div>
-      <h1>DeskRobo Eye Designer</h1>
+      <h1>MyDeskRobo Eye Designer</h1>
       <p>Baue Augen aus Layern und exportiere JSON, Renderer Spec und C++ fuer den Renderer.</p>
     </div>
     <div class="badge-row">
@@ -159,9 +159,20 @@ canvas {
       <div>
         <label>Preset</label>
         <select id="presetSelect">
-          <option value="eve_base">EVE Base (fix)</option>
-          <option value="angry5">Angry 5 Basis</option>
-          <option value="sad">Sad Basis</option>
+          <option value="eve_base">EVE Base</option>
+          <option value="eve_idle">EVE Idle</option>
+          <option value="eve_happy">EVE Happy</option>
+          <option value="eve_sad">EVE Sad</option>
+          <option value="eve_angry_soft">EVE Angry Soft</option>
+          <option value="eve_angry">EVE Angry</option>
+          <option value="eve_angry_hard">EVE Angry Hard</option>
+          <option value="eve_wow">EVE Wow</option>
+          <option value="eve_sleepy">EVE Sleepy</option>
+          <option value="eve_confused">EVE Confused</option>
+          <option value="eve_excited">EVE Excited</option>
+          <option value="eve_dizzy">EVE Dizzy</option>
+          <option value="eve_call">EVE Call</option>
+          <option value="eve_shake">EVE Shake</option>
           <option value="empty">Leer</option>
         </select>
       </div>
@@ -263,7 +274,7 @@ canvas {
 
 <script>
 const presets = {
-  empty: { eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 180, screenShape: 'square', screenSize: 360, layers: [] },
+  empty: { eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 180, screenShape: 'round', screenSize: 360, layers: [] },
   eve_base: {
     eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 180, screenShape: 'round', screenSize: 360,
     layers: [
@@ -272,35 +283,127 @@ const presets = {
       { name: 'Core', type: 'core', side: 'both', x: 0, y: 0, w: 62, h: 104, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 255 }
     ]
   },
-  xx: {
+  eve_idle: {
     eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 180, screenShape: 'round', screenSize: 360,
     layers: [
-      { name: 'Slash A', type: 'rect', side: 'both', x: 0, y: 0, w: 18, h: 92, radius: 6, angle: 42, colorMode: 'eye', color: '#0fdaff', opacity: 255 },
-      { name: 'Slash B', type: 'rect', side: 'both', x: 0, y: 0, w: 18, h: 92, radius: 6, angle: -42, colorMode: 'eye', color: '#0fdaff', opacity: 255 }
+      { name: 'Glow', type: 'glow', side: 'both', x: 0, y: 0, w: 74, h: 114, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 42 },
+      { name: 'Mid', type: 'mid', side: 'both', x: 0, y: 0, w: 68, h: 108, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 110 },
+      { name: 'Core', type: 'core', side: 'both', x: 0, y: 0, w: 62, h: 104, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 255 }
     ]
   },
-  angry5: {
-    eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 191, screenShape: 'round', screenSize: 360,
+  eve_happy: {
+    eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 180, screenShape: 'round', screenSize: 360,
     layers: [
-      { name: 'Glow', type: 'glow', side: 'both', x: 0, y: 0, w: 64, h: 62, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 56 },
-      { name: 'Mid', type: 'mid', side: 'both', x: 0, y: 0, w: 58, h: 56, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 128 },
-      { name: 'Core', type: 'core', side: 'both', x: 0, y: 0, w: 52, h: 50, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 255 },
-      { name: 'Top Cut', type: 'cut_rect', side: 'both', x: 0, y: -25, w: 82, h: 28, radius: 3, angle: 6, colorMode: 'bg', color: '#06080d', opacity: 255 },
-      { name: 'Brow', type: 'brow', side: 'both', x: 0, y: -45, w: 40, h: 8, radius: 3, angle: 78, colorMode: 'eye', color: '#0fdaff', opacity: 255 }
+      { name: 'Glow', type: 'glow', side: 'both', x: 0, y: 0, w: 74, h: 114, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 42 },
+      { name: 'Mid', type: 'mid', side: 'both', x: 0, y: 0, w: 68, h: 108, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 110 },
+      { name: 'Core', type: 'core', side: 'both', x: 0, y: 0, w: 62, h: 104, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 255 },
+      { name: 'SmileCut', type: 'cut_rect', side: 'both', x: 0, y: 34, w: 90, h: 32, radius: 8, angle: 0, colorMode: 'bg', color: '#06080d', opacity: 255 }
     ]
   },
-  sad: {
-    eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 188, screenShape: 'round', screenSize: 360,
+  eve_sad: {
+    eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 180, screenShape: 'round', screenSize: 360,
     layers: [
-      { name: 'Glow', type: 'glow', side: 'both', x: 0, y: 0, w: 74, h: 108, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 46 },
-      { name: 'Mid', type: 'mid', side: 'both', x: 0, y: 0, w: 70, h: 104, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 122 },
-      { name: 'Core', type: 'core', side: 'both', x: 0, y: 0, w: 68, h: 102, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 255 },
-      { name: 'Lid Cut', type: 'cut_rect', side: 'both', x: 0, y: -18, w: 84, h: 10, radius: 3, angle: 0, colorMode: 'bg', color: '#06080d', opacity: 255 },
-      { name: 'Brow', type: 'brow', side: 'both', x: 0, y: -64, w: 46, h: 7, radius: 3, angle: 32, colorMode: 'eye', color: '#0fdaff', opacity: 255 }
+      { name: 'Glow', type: 'glow', side: 'both', x: 0, y: 0, w: 74, h: 114, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 42 },
+      { name: 'Mid', type: 'mid', side: 'both', x: 0, y: 0, w: 68, h: 108, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 110 },
+      { name: 'Core', type: 'core', side: 'both', x: 0, y: 0, w: 62, h: 104, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 255 },
+      { name: 'LidCut', type: 'cut_rect', side: 'both', x: 0, y: -18, w: 86, h: 14, radius: 4, angle: 0, colorMode: 'bg', color: '#06080d', opacity: 255 },
+      { name: 'Brow', type: 'brow', side: 'both', x: 6, y: -62, w: 46, h: 7, radius: 3, angle: 24, colorMode: 'eye', color: '#0fdaff', opacity: 255 }
+    ]
+  },
+  eve_angry_soft: {
+    eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 180, screenShape: 'round', screenSize: 360,
+    layers: [
+      { name: 'Glow', type: 'glow', side: 'both', x: 0, y: 0, w: 74, h: 114, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 42 },
+      { name: 'Mid', type: 'mid', side: 'both', x: 0, y: 0, w: 68, h: 108, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 110 },
+      { name: 'Core', type: 'core', side: 'both', x: 0, y: 0, w: 62, h: 104, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 255 },
+      { name: 'Cut', type: 'cut_rect', side: 'both', x: 12, y: -38, w: 94, h: 28, radius: 3, angle: 14, colorMode: 'bg', color: '#06080d', opacity: 255 },
+      { name: 'Brow', type: 'brow', side: 'both', x: 4, y: -60, w: 50, h: 7, radius: 3, angle: 24, colorMode: 'eye', color: '#0fdaff', opacity: 220 }
+    ]
+  },
+  eve_angry: {
+    eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 180, screenShape: 'round', screenSize: 360,
+    layers: [
+      { name: 'Glow', type: 'glow', side: 'both', x: 0, y: 0, w: 74, h: 114, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 42 },
+      { name: 'Glow2', type: 'glow', side: 'both', x: 0, y: 0, w: 74, h: 114, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 42 },
+      { name: 'Mid', type: 'mid', side: 'both', x: 0, y: 0, w: 68, h: 108, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 110 },
+      { name: 'Core', type: 'core', side: 'both', x: 0, y: 0, w: 62, h: 104, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 255 },
+      { name: 'Cut', type: 'cut_rect', side: 'both', x: 17, y: -46, w: 101, h: 31, radius: 3, angle: 22, colorMode: 'bg', color: '#06080d', opacity: 251 },
+      { name: 'Brow', type: 'brow', side: 'both', x: 0, y: -66, w: 56, h: 8, radius: 3, angle: 33, colorMode: 'eye', color: '#0fdaff', opacity: 255 }
+    ]
+  },
+  eve_angry_hard: {
+    eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 180, screenShape: 'round', screenSize: 360,
+    layers: [
+      { name: 'Glow', type: 'glow', side: 'both', x: 0, y: 0, w: 74, h: 114, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 48 },
+      { name: 'Mid', type: 'mid', side: 'both', x: 0, y: 0, w: 68, h: 108, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 120 },
+      { name: 'Core', type: 'core', side: 'both', x: 0, y: 0, w: 62, h: 104, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 255 },
+      { name: 'Cut', type: 'cut_rect', side: 'both', x: 20, y: -50, w: 112, h: 36, radius: 3, angle: 26, colorMode: 'bg', color: '#06080d', opacity: 255 },
+      { name: 'Brow', type: 'brow', side: 'both', x: 4, y: -70, w: 62, h: 9, radius: 3, angle: 40, colorMode: 'eye', color: '#0fdaff', opacity: 255 },
+      { name: 'Glow2', type: 'glow', side: 'both', x: 0, y: 0, w: 74, h: 114, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 48 }
+    ]
+  },
+  eve_wow: {
+    eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 180, screenShape: 'round', screenSize: 360,
+    layers: [
+      { name: 'Glow', type: 'glow', side: 'both', x: 0, y: -4, w: 76, h: 124, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 44 },
+      { name: 'Mid', type: 'mid', side: 'both', x: 0, y: -4, w: 70, h: 118, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 114 },
+      { name: 'Core', type: 'core', side: 'both', x: 0, y: -4, w: 64, h: 112, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 255 }
+    ]
+  },
+  eve_sleepy: {
+    eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 180, screenShape: 'round', screenSize: 360,
+    layers: [
+      { name: 'Glow', type: 'glow', side: 'both', x: 0, y: 0, w: 74, h: 114, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 34 },
+      { name: 'Mid', type: 'mid', side: 'both', x: 0, y: 0, w: 68, h: 108, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 90 },
+      { name: 'Core', type: 'core', side: 'both', x: 0, y: 0, w: 62, h: 104, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 255 },
+      { name: 'SleepCut', type: 'cut_rect', side: 'both', x: 0, y: -2, w: 92, h: 72, radius: 10, angle: 0, colorMode: 'bg', color: '#06080d', opacity: 255 }
+    ]
+  },
+  eve_confused: {
+    eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 180, screenShape: 'round', screenSize: 360,
+    layers: [
+      { name: 'Glow', type: 'glow', side: 'both', x: 0, y: 0, w: 74, h: 114, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 42 },
+      { name: 'Mid', type: 'mid', side: 'both', x: 0, y: 0, w: 68, h: 108, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 110 },
+      { name: 'Core', type: 'core', side: 'both', x: 0, y: 0, w: 62, h: 104, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 255 },
+      { name: 'RightCut', type: 'cut_rect', side: 'both', x: -10, y: -2, w: 50, h: 54, radius: 8, angle: 0, colorMode: 'bg', color: '#06080d', opacity: 255 },
+      { name: 'Brow', type: 'brow', side: 'both', x: 6, y: -56, w: 38, h: 7, radius: 3, angle: 12, colorMode: 'eye', color: '#0fdaff', opacity: 220 }
+    ]
+  },
+  eve_excited: {
+    eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 180, screenShape: 'round', screenSize: 360,
+    layers: [
+      { name: 'Glow', type: 'glow', side: 'both', x: 0, y: 0, w: 74, h: 114, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 44 },
+      { name: 'Mid', type: 'mid', side: 'both', x: 0, y: 0, w: 68, h: 108, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 114 },
+      { name: 'Core', type: 'core', side: 'both', x: 0, y: 0, w: 62, h: 104, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 255 },
+      { name: 'ExciteCut', type: 'cut_rect', side: 'both', x: 0, y: 28, w: 92, h: 20, radius: 8, angle: 0, colorMode: 'bg', color: '#06080d', opacity: 255 }
+    ]
+  },
+  eve_dizzy: {
+    eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 180, screenShape: 'round', screenSize: 360,
+    layers: [
+      { name: 'Glow', type: 'glow', side: 'both', x: 0, y: 0, w: 74, h: 114, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 38 },
+      { name: 'Mid', type: 'mid', side: 'both', x: 0, y: 0, w: 68, h: 108, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 100 },
+      { name: 'Core', type: 'core', side: 'both', x: 0, y: 0, w: 62, h: 104, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 255 },
+      { name: 'InnerCut', type: 'cut_rect', side: 'both', x: 12, y: 0, w: 30, h: 44, radius: 8, angle: 0, colorMode: 'bg', color: '#06080d', opacity: 255 }
+    ]
+  },
+  eve_call: {
+    eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 180, screenShape: 'round', screenSize: 360,
+    layers: [
+      { name: 'Glow', type: 'glow', side: 'both', x: 0, y: 0, w: 82, h: 82, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 38 },
+      { name: 'Ring', type: 'ellipse', side: 'both', x: 0, y: 0, w: 74, h: 74, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 255 },
+      { name: 'InnerCut', type: 'cut_rect', side: 'both', x: 0, y: 0, w: 48, h: 48, radius: 24, angle: 0, colorMode: 'bg', color: '#06080d', opacity: 255 }
+    ]
+  },
+  eve_shake: {
+    eyeColor: '#0fdaff', bgColor: '#06080d', eyeGap: 68, baseY: 180, screenShape: 'round', screenSize: 360,
+    layers: [
+      { name: 'Glow', type: 'glow', side: 'both', x: 0, y: 0, w: 74, h: 114, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 42 },
+      { name: 'Mid', type: 'mid', side: 'both', x: 0, y: 0, w: 68, h: 108, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 110 },
+      { name: 'Core', type: 'core', side: 'both', x: 0, y: 0, w: 62, h: 104, radius: 999, angle: 0, colorMode: 'eye', color: '#0fdaff', opacity: 255 }
     ]
   }
 };
-
 const state = {
   sceneName: 'custom_eye_scene',
   eyeColor: '#0fdaff',

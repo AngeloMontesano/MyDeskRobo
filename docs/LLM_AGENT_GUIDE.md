@@ -1,125 +1,118 @@
-# DeskRobo LLM Agent Guide
+# MyDeskRobo LLM Agent Guide
 
-This document is for coding agents (LLM/KI) that modify this repository.
+The public release target is the MyDeskRoboEngine-based EVE runtime.
 
 ## 1. Primary Goal
 
-Keep firmware stable first. Prefer minimal, reversible changes.  
-Do not break display bring-up, LVGL loop, or BLE command handling.
+Keep `esp32-s3-mydeskrobo-full` stable.
+Do not regress:
+- display bring-up
+- LVGL main-loop ownership
+- BLE queue handoff
+- web frontend control path
 
 ## 2. Critical Invariants
 
-- `main.cpp` init order must stay valid: power -> I2C/EXIO -> backlight -> LCD -> LVGL -> app modules.
-- UI/LVGL operations must run from main loop context.
-- BLE callbacks must enqueue commands; do not directly mutate LVGL objects in BLE context.
-- Keep `platformio.ini` stable unless user explicitly requests environment migration.
+- LVGL work stays in main loop context.
+- BLE callbacks only enqueue commands.
+- Eye rendering goes through the canvas renderer, not ad-hoc rotated LVGL object tricks.
+- Public runtime is EVE-only unless the user explicitly requests reopening style families.
 
-## 3. Where to Change What
+## 3. Main Files
 
-- Face rendering/styling:
-  - `src/anime_face.h`
-  - `src/anime_face.cpp`
-
-- App logic (emotion state, style/tuning persistence):
+- Runtime state / API bridge:
   - `src/DeskRoboMVP.h`
-  - `src/DeskRoboMVP.cpp`
-
-- HTTP API + web frontend:
+  - `src/DeskRoboMVP_nextgen.cpp`
+- Web API + embedded frontend:
   - `src/DeskRoboWeb.cpp`
-
-- BLE command protocol:
-  - `src/DeskRoboBLE.h`
+- BLE control path:
   - `src/DeskRoboBLE.cpp`
-
-- Low-level display/backlight:
-  - `src/LVGL_Arduino/Display_ST77916.*`
-
-- PC-side BLE/event bridge:
+- Scene engine:
+  - `MyDeskRoboEngine/include/SceneSpec.h`
+  - `MyDeskRoboEngine/include/LayerRenderer.h`
+  - `MyDeskRoboEngine/src/LayerRenderer.cpp`
+- Scene assets:
+  - `MyDeskRoboEngine/include/scenes/*.h`
+- Eye editor docs:
+  - `docs/eye_designer/*`
+- PC agent:
   - `pc_agent/*`
 
 ## 4. Safe Change Procedure
 
-1. Inspect current files and API contracts (`rg` search first).
-2. Edit only necessary files.
-3. Build immediately.
-4. If build passes, upload and validate runtime behavior.
-5. Report exact modified files and functional impact.
+1. Search first.
+2. Touch the minimum number of files.
+3. Build the exact target you changed.
+4. If Python GUI/agent code changed, run `py_compile`.
+5. Report concrete file changes and residual risk.
 
-## 5. Required Validation Commands (Windows)
+## 5. Required Validation
 
-Build:
-
-```powershell
-$env:PYTHONIOENCODING='utf-8'
-$env:PYTHONUTF8='1'
-chcp 65001 > $null
-& "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run
-```
-
-Upload:
+Firmware build:
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'
 $env:PYTHONUTF8='1'
 chcp 65001 > $null
-& "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run -t upload
+& "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run -e esp32-s3-mydeskrobo-full
 ```
 
-Monitor:
+Firmware upload:
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'
 $env:PYTHONUTF8='1'
 chcp 65001 > $null
-& "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" device monitor --port COM5 --baud 115200
+& "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run -e esp32-s3-mydeskrobo-full -t upload
 ```
 
-## 6. API Contract Summary
+Python check:
+
+```powershell
+python -m py_compile pc_agent\pc_agent.py pc_agent\agent_gui.py pc_agent\ble_client.py
+```
+
+## 6. API Summary
 
 - `POST /api/emotion?name=<EMOTION>&hold=<ms>`
 - `POST /api/eyes?left=<EMOTION>&right=<EMOTION>&hold=<ms>`
-- `POST /api/style?name=EVE|PLAYFUL`
+- `POST /api/style?name=EVE`
 - `POST /api/backlight?value=0..100`
 - `POST /api/tune/set?key=<k>&value=<v>`
 - `POST /api/event?name=CALL|MAIL|TEAMS|LOUD|VERY_LOUD|QUIET|TILT|SHAKE`
-- `POST /api/ota` multipart upload
-
-If adding endpoints, update:
-- embedded web UI in `DeskRoboWeb.cpp`
-- this document and `README.md`
+- `POST /api/ota`
 
 ## 7. Common Failure Modes
 
-- Display blinks in test colors:
-  - suspect low-level display path or unsafe thread interaction
-  - verify no direct LVGL calls from BLE/task callbacks
-
-- BLE says "sent" but no visible change:
-  - verify queue/dispatch in `DeskRoboBLE_Loop()`
-  - validate emotion code mapping and hold time
-
-- Windows Bleak `pythoncom`/MTA issues in `pc_agent`:
-  - ensure STA/MTA workaround remains active
-  - avoid importing COM-heavy modules into scanner loop without care
+- Eyes render unlike the editor:
+  - inspect the canvas renderer first
+  - do not reintroduce rotated LVGL object layering for `cut`/`brow`
+- BLE says sent but nothing changes:
+  - inspect `DeskRoboBLE.cpp` queueing and `DeskRoboMVP_nextgen.cpp`
+- Web UI shows stale options:
+  - check embedded HTML/JS in `DeskRoboWeb.cpp`
+- GUI and firmware diverge:
+  - align `pc_agent/agent_gui.py` with the public API, not just scene-demo assets
 
 ## 8. Persistence Rules
 
-- Style/tuning persistence uses Preferences namespace `deskrobo`.
-- If you add persistent settings:
-  - add save key in `DeskRobo_SaveTuning()`
-  - add load key in `DeskRobo_LoadTuning()`
-  - keep defaults backward compatible
+Preferences namespace: `deskrobo`
+
+If new persistent settings are added:
+- save in `DeskRobo_SaveTuning()`
+- load in `DeskRobo_LoadTuning()` / `load_prefs_values()`
+- keep backward-compatible defaults
 
 ## 9. Scope Discipline
 
-- Do not migrate Arduino -> ESP-IDF unless explicitly requested.
-- Do not perform broad refactors while fixing a specific issue.
-- Keep ASCII-only docs/code unless file already uses Unicode.
+- Do not silently widen styles again.
+- Keep scene authoring inside `MyDeskRoboEngine`; do not reintroduce the removed legacy renderer path.
+- Prefer scene/data changes over hardcoded emotion-specific drawing hacks.
 
-## 10. Handoff Format (for agents)
+## 10. Handoff Format
 
-When done, report:
+Report:
 1. modified files
 2. behavior changes
-3. build/upload result
-4. any residual risks
+3. validation run
+4. residual risks

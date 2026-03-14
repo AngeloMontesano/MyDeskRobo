@@ -1,110 +1,90 @@
-# DeskRobo Technical Documentation
+# MyDeskRobo Technical Documentation
 
 ## 1. Overview
 
-DeskRobo firmware runs on a Waveshare ESP32-S3-LCD-1.85 using Arduino + PlatformIO.  
-Core responsibilities:
-- initialize board/display/LVGL
-- render animated eyes with multiple styles/emotions
-- expose local AP + web API for control and OTA
-- accept BLE commands from PC agent
+MyDeskRobo runs on the Waveshare ESP32-S3-LCD-1.85 with Arduino + PlatformIO.
+
+Current public-facing runtime path:
+- `esp32-s3-mydeskrobo-full`
+- MyDeskRoboEngine EVE-only scene renderer
+- Web UI, BLE control path, OTA, backlight, tuning persistence
+
+The public release path uses `MyDeskRoboEngine` and the EVE-only scene renderer.
 
 ## 2. Runtime Architecture
 
-## 2.1 Boot Sequence
+Main firmware loop:
+- display/backlight/LVGL bring-up
+- MyDeskRobo app runtime
+- web server loop
+- BLE command loop
+- LVGL flush loop
 
-`src/main.cpp` boot order:
-1. power hold pin setup
-2. I2C + EXIO init
-3. optional gyro init (compile flag)
-4. backlight init and default level
-5. LCD init
-6. LVGL init
-7. DeskRobo MVP init
-8. Web AP/server init
-9. Connectivity policy: wait up to 60s for STA WLAN; then start BLE
-   - if WLAN connected in 60s: keep Wi-Fi on
-   - if WLAN not connected in 60s: disable Wi-Fi (AP+STA)
-
-Main loop:
-- `DeskRobo_Loop()`
-- `DeskRoboWeb_Loop()`
-- boot connectivity policy check (WLAN timeout/BLE fallback)
-- `DeskRoboBLE_Loop()` (after BLE init)
-- `Lvgl_Loop()`
-
-## 2.2 Modules
-
-- `src/anime_face.*`  
-  Eye renderer and animation timing (blink, drift, saccade, glow pulse), style presets.
-
-- `src/DeskRoboMVP.*`  
-  Emotion state machine, event priority/TTL, tuning persistence, style selection.
-
-- `src/DeskRoboWeb.*`  
-  Wi-Fi AP + HTTP server + embedded UI + OTA upload endpoint.
-
-- `src/DeskRoboBLE.*`  
-  BLE command interface and command queue handoff to main loop.
-
-- `src/LVGL_Arduino/*`  
-  Waveshare display/board support drivers.
+Key modules:
+- `src/DeskRoboMVP_nextgen.cpp`
+  - app state, active emotion, event priority/TTL, tuning, persistence, sleep/display policy
+- `MyDeskRoboEngine/include/scenes/*.h`
+  - EVE scene definitions
+- `MyDeskRoboEngine/src/LayerRenderer.cpp`
+  - canvas-based renderer used by the public runtime
+- `src/DeskRoboWeb.cpp`
+  - AP mode, HTTP API, embedded frontend, OTA
+- `src/DeskRoboBLE.cpp`
+  - BLE protocol and queue handoff into main loop
+- `pc_agent/*`
+  - Windows BLE agent and GUI
 
 ## 3. Face Model
 
-## 3.1 Emotions
+### 3.1 Style
 
-Supported emotions:
+Current release style:
+- `EVE`
+
+Old style families are intentionally not exposed in the new runtime.
+
+### 3.2 Emotions
+
+Public control path currently exposes:
 - `IDLE`
 - `HAPPY`
 - `SAD`
 - `ANGRY`
-- `ANGST`
 - `WOW`
 - `SLEEPY`
-- `LOVE`
 - `CONFUSED`
-- `EXCITED`
-- `ANRUF`
-- `LAUT`
 - `MAIL`
-- `DENKEN`
+- `CALL`
+- `SHAKE`
 - `WINK`
+- `XX`
 - `GLITCH`
-- `LOCKED`
-- `WIFI`
 
-## 3.2 Styles
+### 3.3 Eye Pair Override
 
-Supported styles:
-- `EVE`
-- `PLAYFUL`
+`DeskRobo_SetEyePair(left, right, hold_ms)` temporarily forces left/right eye scenes.
 
-Style is applied in renderer (`AnimeFace::setStyle`) and persisted via Preferences through MVP save/load.
+## 4. Event Logic
 
-## 3.3 Eye Pair Override
-
-`DeskRobo_SetEyePair(left, right, hold_ms)` forces left/right emotions for a temporary window; after timeout, normal emotion flow resumes.
-
-## 4. Event and Priority Logic
-
-`DeskRobo_PushEvent()` maps event to `(emotion, priority, ttl)` and suppresses lower-priority events while active TTL has not expired.
+Events are mapped into temporary emotions with priority and TTL.
 
 Examples:
-- `CALL` -> high priority `ANRUF`
-- `MAIL` -> medium priority `MAIL`
-- loud audio -> `LAUT` / `WOW`
+- `CALL` -> call scene
+- `MAIL` -> confused/mail-style reaction
+- `LOUD` -> wow
+- `VERY_LOUD` -> shake
+- `TILT` -> confused
+- `SHAKE` -> shake
 
 ## 5. Web API
 
-Base (while Wi-Fi is active): AP mode (`DeskRobo-Setup`) at `http://192.168.4.1/`
+While Wi-Fi is active, the device serves AP mode as `MyDeskRobo-Setup` at `http://192.168.4.1/`.
 
-Boot policy note: if no STA WLAN connection is established within 60 seconds after boot, Wi-Fi is disabled (AP+STA off) and BLE starts.
-
+Main endpoints:
 - `GET /api/status`
 - `POST /api/emotion?name=<EMOTION>&hold=<ms>`
 - `POST /api/eyes?left=<EMOTION>&right=<EMOTION>&hold=<ms>`
-- `POST /api/style?name=EVE|PLAYFUL`
+- `POST /api/style?name=EVE`
 - `GET /api/backlight`
 - `POST /api/backlight?value=0..100`
 - `GET /api/tune/get`
@@ -112,50 +92,70 @@ Boot policy note: if no STA WLAN connection is established within 60 seconds aft
 - `POST /api/tune/save`
 - `POST /api/tune/load`
 - `POST /api/event?name=QUIET|LOUD|VERY_LOUD|TILT|SHAKE|CALL|MAIL|TEAMS`
-- `POST /api/ota` (multipart firmware upload)
+- `POST /api/ota`
 
 ## 6. BLE Control Path
 
-BLE commands are received in BLE context and queued to main loop to avoid LVGL cross-thread access issues.
+BLE never mutates LVGL directly.
+BLE callbacks parse commands and enqueue work for the main loop.
 
-Accepted command families include:
-- numeric emotion codes
-- text commands such as `EVENT:*`, `EMOTION:*`, `EYES:*`
+Accepted control families include:
+- emotion
+- event
+- eye pair
+- style
+- backlight
+- tuning
+- time sync
 
 ## 7. Persistence
 
-Namespace: `Preferences("deskrobo")`
+Preferences namespace:
+- `deskrobo`
 
-Persisted values:
-- style (`face_style`)
-- tuning parameters (`drift`, `saccade`, `blink`, `glow`)
+Persisted settings include:
+- idle tuning values
+- blink/glow/shake tuning
+- sleep/display timing
+- eye color
+- gyro thresholds
 
-Backlight is runtime adjustable via API; current level is tracked by `LCD_Backlight`.
+The current runtime forces style persistence to `EVE`.
 
-## 8. Build and Flash
+## 8. Build Targets
 
-Using PlatformIO environment in `platformio.ini`:
-- board: `esp32-s3-devkitc-1`
-- framework: `arduino`
-- upload/monitor port (current): `COM5`
+Main release target:
+- `esp32-s3-mydeskrobo-full`
 
-Recommended command (Windows):
+
+Example build:
 
 ```powershell
 $env:PYTHONIOENCODING='utf-8'
 $env:PYTHONUTF8='1'
 chcp 65001 > $null
-& "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run -t upload
+& "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run -e esp32-s3-mydeskrobo-full
+```
+
+Example upload:
+
+```powershell
+$env:PYTHONIOENCODING='utf-8'
+$env:PYTHONUTF8='1'
+chcp 65001 > $null
+& "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run -e esp32-s3-mydeskrobo-full -t upload
 ```
 
 ## 9. Stability Notes
 
-- Gyro event flags are disabled by default in `platformio.ini`.
-- If display starts blinking test colors, suspect display driver path/regression and roll back recent low-level display changes first.
+- Gyro event behavior should be validated carefully; display stability has priority.
+- The canvas renderer is required for accurate `cut`/`brow` rendering.
+- Small overlay labels like `Zzz` and `?` remain more fragile than scene-native render ops.
 
-## 10. Extension Points
+## 10. Public Release Checklist
 
-- Add new face styles in `anime_face.*` enum + draw logic.
-- Add new web actions in `DeskRoboWeb.cpp` + MVP bridge.
-- Add new BLE command types in `DeskRoboBLE.cpp`.
-- Add new external event source in `pc_agent/monitors/*`.
+Before publishing:
+- confirm `esp32-s3-mydeskrobo-full` builds cleanly
+- confirm PC GUI Python files compile cleanly
+- ensure docs match the nextgen path
+- add a real `LICENSE` file
