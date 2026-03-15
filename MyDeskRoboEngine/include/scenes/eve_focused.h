@@ -11,7 +11,8 @@ static const RenderOp kEveFocusedOps[] = {
     {true, "Mid",   LayerOp::DrawMid,  Primitive::Ellipse,     Side::Both, true, true, {0, 0}, {68, 108}, 999, 0, {ColorMode::RuntimeEye,      lv_color_hex(0x0fdaff), true}, (lv_opa_t)110},
     {true, "Core",  LayerOp::DrawCore, Primitive::Ellipse,     Side::Both, true, true, {0, 0}, {62, 104}, 999, 0, {ColorMode::RuntimeEye,      lv_color_hex(0x0fdaff), true}, LV_OPA_COVER},
     {true, "Cut",   LayerOp::DrawCut,  Primitive::RoundedRect, Side::Both, true, true, {0, -40}, {90, 26}, 3, 0, {ColorMode::SceneBackground, lv_color_hex(0x06080d), false}, LV_OPA_COVER},
-    {true, "Pupil", LayerOp::DrawCut,  Primitive::Ellipse,     Side::Both, true, true, {0,   4}, {28, 34}, 14, 0, {ColorMode::SceneBackground, lv_color_hex(0x06080d), false}, (lv_opa_t)120, true},
+    // mirror_x_for_right=false so both pupils scan in the same direction (left→right reading sweep).
+    {true, "Pupil", LayerOp::DrawCut,  Primitive::Ellipse,     Side::Both, false, false, {0,   4}, {28, 34}, 14, 0, {ColorMode::SceneBackground, lv_color_hex(0x06080d), false}, (lv_opa_t)120, true},
 };
 
 static const EyeSceneSpec kEveFocusedScene = {

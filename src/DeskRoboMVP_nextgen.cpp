@@ -25,9 +25,9 @@
 #include "scenes/eve_dizzy.h"
 #include "scenes/eve_excited.h"
 #include "scenes/eve_glitch.h"
-#include "scenes/eve_skeptical.h"
 #include "scenes/eve_bored.h"
 #include "scenes/eve_focused.h"
+#include "scenes/eve_happy_tongue.h"
 
 using namespace nse;
 
@@ -101,6 +101,7 @@ lv_obj_t *g_status_label = nullptr;
 lv_obj_t *g_scene_label = nullptr;
 lv_obj_t *g_sleep_labels[3] = {nullptr, nullptr, nullptr};
 lv_obj_t *g_confused_label = nullptr;
+lv_obj_t *g_tongue_obj = nullptr;
 lv_obj_t *g_boot_splash = nullptr;
 uint32_t g_boot_splash_started_ms = 0;
 
@@ -144,7 +145,7 @@ static constexpr uint32_t kBootSplashMs = 2800UL;
 static constexpr const char *kBootBrand = "My Robo Desk";
 static constexpr const char *kBootVersion = "v0.5";
 // Mutable shuffled idle sequence. GLITCH is always immediately followed by CONFUSED.
-static constexpr uint8_t kIdleRoundLen = 12;
+static constexpr uint8_t kIdleRoundLen = 11;
 static DeskRoboEmotion g_idle_round[kIdleRoundLen] = {
     DESKROBO_EMOTION_HAPPY,
     DESKROBO_EMOTION_SAD,
@@ -153,7 +154,6 @@ static DeskRoboEmotion g_idle_round[kIdleRoundLen] = {
     DESKROBO_EMOTION_SLEEPY,
     DESKROBO_EMOTION_WINK,
     DESKROBO_EMOTION_XX,
-    DESKROBO_EMOTION_SKEPTICAL,
     DESKROBO_EMOTION_BORED,
     DESKROBO_EMOTION_FOCUSED,
     DESKROBO_EMOTION_GLITCH,
@@ -182,9 +182,9 @@ const char *emotion_name(DeskRoboEmotion emotion) {
     case DESKROBO_EMOTION_WINK: return "WINK";
     case DESKROBO_EMOTION_XX: return "XX";
     case DESKROBO_EMOTION_GLITCH: return "GLITCH";
-    case DESKROBO_EMOTION_SKEPTICAL: return "SKEPTICAL";
     case DESKROBO_EMOTION_BORED: return "BORED";
     case DESKROBO_EMOTION_FOCUSED: return "FOCUSED";
+    case DESKROBO_EMOTION_HAPPY_TONGUE: return "HAPPY_TONGUE";
     default: return "IDLE";
   }
 }
@@ -234,9 +234,9 @@ const EyeSceneSpec &scene_for_emotion(DeskRoboEmotion emotion, DeskRoboFaceStyle
     case DESKROBO_EMOTION_WINK: return kEveWinkScene;
     case DESKROBO_EMOTION_XX: return kEveXXScene;
     case DESKROBO_EMOTION_GLITCH: return kEveGlitchScene;
-    case DESKROBO_EMOTION_SKEPTICAL: return kEveSkepticalScene;
     case DESKROBO_EMOTION_BORED: return kEveBoredScene;
     case DESKROBO_EMOTION_FOCUSED: return kEveFocusedScene;
+    case DESKROBO_EMOTION_HAPPY_TONGUE: return kEveHappyTongueScene;
     case DESKROBO_EMOTION_IDLE:
     default:
       return kEveIdleScene;
@@ -309,11 +309,10 @@ void shuffle_idle_round() {
       DESKROBO_EMOTION_SLEEPY,
       DESKROBO_EMOTION_WINK,
       DESKROBO_EMOTION_XX,
-      DESKROBO_EMOTION_SKEPTICAL,
       DESKROBO_EMOTION_BORED,
       DESKROBO_EMOTION_FOCUSED,
   };
-  const uint8_t base_len = 10;
+  const uint8_t base_len = 9;
 
   // Fisher-Yates shuffle of base pool
   for (uint8_t i = base_len - 1; i > 0; --i) {
@@ -458,6 +457,22 @@ RuntimeState make_runtime_state(const EyeSceneSpec &scene, lv_color_t color, boo
       g_pupil.y = (int16_t)random(-6, 7);
       g_pupil.next_jitter_ms = now + (uint32_t)random(50, 90);
     }
+  } else if (strcmp(scene.name, "eve_angry_hard") == 0) {
+    // Pupils converge inward + slightly upward — intensifies the hard scowl.
+    // mirror_x_for_right on the Pupil op causes side_x() to negate pupil_x for the right eye.
+    g_pupil.x = 9;
+    g_pupil.y = -4;
+  } else if (strcmp(scene.name, "eve_bored") == 0) {
+    // Eye-roll: pupils drift upward over 2500 ms then snap back; 6000 ms total cycle.
+    const uint32_t cycle_ms  = 6000;
+    const uint32_t roll_ms   = 2500;
+    const uint32_t phase     = now % cycle_ms;
+    if (phase < roll_ms) {
+      g_pupil.y = -(int16_t)((uint32_t)phase * 32u / roll_ms);
+    } else {
+      g_pupil.y = 0;
+    }
+    g_pupil.x = 0;
   } else {
     g_pupil.x = 0;
     g_pupil.y = 0;
@@ -554,6 +569,21 @@ void update_confused_overlay(const EyeSceneSpec &left_scene, const EyeSceneSpec 
   const uint32_t now = millis();
   const float phase = ((float)(now % 2400U) / 2400.0f) * 6.2831853f;
   lv_obj_set_pos(g_confused_label, 244 + (lv_coord_t)(cosf(phase * 0.6f) * 2), 48 + (lv_coord_t)(sinf(phase) * 4));
+}
+
+void update_tongue_overlay(const EyeSceneSpec &left_scene, const EyeSceneSpec &right_scene) {
+  if (!g_tongue_obj) return;
+  const bool show = strcmp(left_scene.name, "eve_happy_tongue") == 0 ||
+                    strcmp(right_scene.name, "eve_happy_tongue") == 0;
+  if (!show) {
+    lv_obj_add_flag(g_tongue_obj, LV_OBJ_FLAG_HIDDEN);
+    return;
+  }
+  lv_obj_clear_flag(g_tongue_obj, LV_OBJ_FLAG_HIDDEN);
+  // Subtle breathing bob: ±3 px at ~1.4 s period.
+  const uint32_t now = millis();
+  const float phase = ((float)(now % 1400U) / 1400.0f) * 6.2831853f;
+  lv_obj_set_pos(g_tongue_obj, 158, 222 + (lv_coord_t)(sinf(phase) * 3.0f));
 }
 
 void apply_sleep_policy() {
@@ -710,6 +740,19 @@ void create_ui() {
   lv_obj_add_flag(g_confused_label, LV_OBJ_FLAG_HIDDEN);
   lv_obj_set_pos(g_confused_label, 244, 48);
 
+  // Tongue: red oval below the eyes, centered horizontally.
+  // Visible only for HAPPY_TONGUE; hidden by default.
+  g_tongue_obj = lv_obj_create(lv_scr_act());
+  lv_obj_remove_style_all(g_tongue_obj);
+  lv_obj_clear_flag(g_tongue_obj, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_size(g_tongue_obj, 44, 82);
+  lv_obj_set_style_radius(g_tongue_obj, 22, 0);
+  lv_obj_set_style_bg_color(g_tongue_obj, lv_color_hex(0xE82030), 0);
+  lv_obj_set_style_bg_opa(g_tongue_obj, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_width(g_tongue_obj, 0, 0);
+  lv_obj_set_pos(g_tongue_obj, 158, 222);
+  lv_obj_add_flag(g_tongue_obj, LV_OBJ_FLAG_HIDDEN);
+
   g_boot_splash = lv_obj_create(lv_scr_act());
   lv_obj_remove_style_all(g_boot_splash);
   lv_obj_clear_flag(g_boot_splash, LV_OBJ_FLAG_SCROLLABLE);
@@ -771,6 +814,7 @@ void render_active() {
   update_glitch_fx(left_scene);
   update_sleep_overlay(left_scene, right_scene);
   update_confused_overlay(left_scene, right_scene);
+  update_tongue_overlay(left_scene, right_scene);
 
   lv_color_t left_color = eye_color();
   lv_color_t right_color = left_color;

@@ -156,7 +156,11 @@ int16_t LayerRenderer::side_x(const EyeSceneSpec &scene, const RuntimeState &sta
   const int16_t center_x = scene.geometry.virtual_width / 2;
   const int16_t eye_center = right ? center_x + scene.geometry.eye_gap : center_x - scene.geometry.eye_gap;
   const int16_t offset_x = (right && op.mirror_x_for_right) ? -op.offset.x : op.offset.x;
-  const int16_t pupil_off = op.is_pupil ? state.pupil_x : 0;
+  // Pupil mirrors with the eye: positive pupil_x → both pupils converge inward when mirror_x_for_right is set.
+  int16_t pupil_off = 0;
+  if (op.is_pupil) {
+    pupil_off = (right && op.mirror_x_for_right) ? -state.pupil_x : state.pupil_x;
+  }
   return eye_center + offset_x + state.drift_x + state.saccade_x + pupil_off - origin_x_;
 }
 
