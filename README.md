@@ -17,7 +17,8 @@ Included:
 - firmware target `esp32-s3-mydeskrobo-full`
 - EVE face renderer (`MyDeskRoboEngine`) — canvas-based, single color per eye
 - BLE control path (PC agent ↔ device)
-- Windows PC agent and GUI with demo mode
+- Windows PC agent for Outlook, Teams and co. Events 
+- windows GUI for Finetune and with demo mode
 - boot splash: `My Robo Desk v0.5`
 - 20 emotions with animated transitions (fade-to-black between scenes)
 - idle round-robin: spontaneous emotion changes after inactivity
