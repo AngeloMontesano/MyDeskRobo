@@ -156,11 +156,13 @@ int16_t LayerRenderer::side_x(const EyeSceneSpec &scene, const RuntimeState &sta
   const int16_t center_x = scene.geometry.virtual_width / 2;
   const int16_t eye_center = right ? center_x + scene.geometry.eye_gap : center_x - scene.geometry.eye_gap;
   const int16_t offset_x = (right && op.mirror_x_for_right) ? -op.offset.x : op.offset.x;
-  return eye_center + offset_x + state.drift_x + state.saccade_x - origin_x_;
+  const int16_t pupil_off = op.is_pupil ? state.pupil_x : 0;
+  return eye_center + offset_x + state.drift_x + state.saccade_x + pupil_off - origin_x_;
 }
 
 int16_t LayerRenderer::side_y(const EyeSceneSpec &scene, const RuntimeState &state, const RenderOp &op) const {
-  return scene.geometry.base_y + op.offset.y + state.drift_y + state.saccade_y - kEyeViewportY;
+  const int16_t pupil_off = op.is_pupil ? state.pupil_y : 0;
+  return scene.geometry.base_y + op.offset.y + state.drift_y + state.saccade_y + pupil_off - kEyeViewportY;
 }
 
 int16_t LayerRenderer::side_angle(const RenderOp &op, bool right) const {

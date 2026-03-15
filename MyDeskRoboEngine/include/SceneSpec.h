@@ -63,6 +63,9 @@ struct RenderOp {
   int16_t angle_deg;
   ColorRef color;
   lv_opa_t opacity;
+  // If true, state.pupil_x/y is added on top of the normal saccade offset.
+  // Leave unset (false) for all non-pupil ops — trailing zero-init handles it.
+  bool is_pupil;
 };
 
 struct SceneGeometry {
@@ -118,6 +121,8 @@ struct RuntimeState {
   int16_t drift_y;
   int16_t saccade_x;
   int16_t saccade_y;
+  int16_t pupil_x;   // extra offset applied only to ops with is_pupil=true
+  int16_t pupil_y;
   int8_t pulse_shift;
   bool blink;
   int16_t blink_height;

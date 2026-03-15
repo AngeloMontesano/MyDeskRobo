@@ -82,6 +82,12 @@ struct GazeState {
   uint32_t next_gaze_ms = 0;
 };
 
+struct PupilState {
+  int16_t x = 0;
+  int16_t y = 0;
+  uint32_t next_jitter_ms = 0;  // used by SHAKE for random update timing
+};
+
 // Gaze directions: left/right + 4 diagonals only.
 // Pure up/down removed — doesn't read well on this tall ellipse eye shape.
 static const int8_t kGazeDirX[] = { 1, -1,  1,  1, -1, -1};
@@ -103,6 +109,7 @@ NextgenTuning g_tuning;
 GlitchFxState g_glitch_fx;
 SaccadeState g_saccade;
 GazeState g_gaze;
+PupilState g_pupil;
 uint32_t g_next_blink_interval_ms = 3600;
 uint32_t g_next_rr_interval_ms = 15000;
 uint32_t g_micro_expr_next_ms = 0;
@@ -434,6 +441,30 @@ RuntimeState make_runtime_state(const EyeSceneSpec &scene, lv_color_t color, boo
     state.saccade_x = 0;
     state.saccade_y = 0;
   }
+  // ---- Pupil animation (only affects ops with is_pupil=true) ----
+  if (strcmp(scene.name, "eve_focused") == 0) {
+    // Horizontal reading scan: sawtooth left→right over 2200ms, instant reset.
+    // Saccade is suppressed for FOCUSED so the iris stays still while the pupil scans.
+    state.saccade_x = 0;
+    state.saccade_y = 0;
+    const uint32_t scan_period = 2200;
+    const float t = (float)(now % scan_period) / (float)scan_period;
+    g_pupil.x = (int16_t)(-16 + (int16_t)(t * 32.0f));
+    g_pupil.y = 0;
+  } else if (strcmp(scene.name, "eve_shake") == 0) {
+    // Rapid independent jitter — update every 50–90 ms for chaotic feel.
+    if (now >= g_pupil.next_jitter_ms) {
+      g_pupil.x = (int16_t)random(-10, 11);
+      g_pupil.y = (int16_t)random(-6, 7);
+      g_pupil.next_jitter_ms = now + (uint32_t)random(50, 90);
+    }
+  } else {
+    g_pupil.x = 0;
+    g_pupil.y = 0;
+  }
+  state.pupil_x = g_pupil.x;
+  state.pupil_y = g_pupil.y;
+
   if (g_tuning.glow_pulse_period_ms > 0) {
     const float phase = (float)(now % (uint32_t)g_tuning.glow_pulse_period_ms) / (float)g_tuning.glow_pulse_period_ms;
     state.pulse_shift = (int8_t)(sinf(phase * 6.2831853f) * (float)g_tuning.glow_pulse_amp);
