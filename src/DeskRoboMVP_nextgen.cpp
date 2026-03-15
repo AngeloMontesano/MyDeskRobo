@@ -522,7 +522,7 @@ void update_confused_overlay(const EyeSceneSpec &left_scene, const EyeSceneSpec 
   lv_obj_clear_flag(g_confused_label, LV_OBJ_FLAG_HIDDEN);
   const uint32_t now = millis();
   const float phase = ((float)(now % 2400U) / 2400.0f) * 6.2831853f;
-  lv_obj_set_pos(g_confused_label, 250 + (lv_coord_t)(cosf(phase * 0.6f) * 2), 28 + (lv_coord_t)(sinf(phase) * 4));
+  lv_obj_set_pos(g_confused_label, 244 + (lv_coord_t)(cosf(phase * 0.6f) * 2), 48 + (lv_coord_t)(sinf(phase) * 4));
 }
 
 void apply_sleep_policy() {
@@ -674,10 +674,10 @@ void create_ui() {
   lv_label_set_text(g_confused_label, "??");
   lv_obj_set_style_text_color(g_confused_label, lv_color_make(0x0F, 0xDA, 0xFF), 0);
   lv_obj_set_style_text_opa(g_confused_label, LV_OPA_COVER, 0);
-  lv_obj_set_style_text_font(g_confused_label, &lv_font_montserrat_20, 0);
+  lv_obj_set_style_text_font(g_confused_label, &lv_font_montserrat_28, 0);
   lv_obj_set_style_bg_opa(g_confused_label, LV_OPA_TRANSP, 0);
   lv_obj_add_flag(g_confused_label, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_set_pos(g_confused_label, 248, 24);
+  lv_obj_set_pos(g_confused_label, 244, 48);
 
   g_boot_splash = lv_obj_create(lv_scr_act());
   lv_obj_remove_style_all(g_boot_splash);
