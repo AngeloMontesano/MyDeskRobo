@@ -3,7 +3,7 @@ import importlib.util
 import logging
 
 from config import OUTLOOK_POLL_S
-from monitors import Emotion, RoboEvent
+from monitors import RoboEvent
 
 LOG = logging.getLogger("outlook")
 HAS_WIN32 = importlib.util.find_spec("pythoncom") is not None and importlib.util.find_spec("win32com") is not None
@@ -55,7 +55,7 @@ async def run(queue: asyncio.Queue):
             if count > _State.last_count or (entry_id and entry_id != _State.last_entry_id):
                 await queue.put(
                     RoboEvent(
-                        emotion=Emotion.EMAIL,
+                        event_name="PC_MAIL",
                         priority=7,
                         duration_ms=8000,
                         source="outlook",

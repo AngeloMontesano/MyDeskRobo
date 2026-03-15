@@ -6,14 +6,15 @@ from pathlib import Path
 import aiofiles
 
 from config import TEAMS_LOG_PATH, TEAMS_LOG_POLL_MS
-from monitors import Emotion, RoboEvent
+from monitors import RoboEvent
 
 LOG = logging.getLogger("teams")
 
+# Each pattern maps to (event_name, priority, duration_ms)
 PATTERNS = {
-    r"callingservice.*incoming call": (Emotion.CALL, 10, 0),
-    r"chat notification.*unread": (Emotion.TEAMS_MSG, 6, 8000),
-    r"calling.*callstate.*connected": (Emotion.SURPRISED, 8, 5000),
+    r"callingservice.*incoming call": ("PC_CALL",         10, 0),
+    r"chat notification.*unread":     ("PC_TEAMS",         6, 8000),
+    r"calling.*callstate.*connected": ("PC_CALL_ACTIVE",   8, 5000),
 }
 
 
@@ -32,11 +33,11 @@ async def run(queue: asyncio.Queue):
                 await asyncio.sleep(TEAMS_LOG_POLL_MS / 1000.0)
                 continue
             low = line.lower()
-            for pattern, (emotion, priority, duration_ms) in PATTERNS.items():
+            for pattern, (event_name, priority, duration_ms) in PATTERNS.items():
                 if re.search(pattern, low):
                     await queue.put(
                         RoboEvent(
-                            emotion=emotion,
+                            event_name=event_name,
                             priority=priority,
                             duration_ms=duration_ms,
                             source="teams",

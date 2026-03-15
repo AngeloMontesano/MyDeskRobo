@@ -34,6 +34,7 @@ class BleClient:
         self._seq = 0
         self._ack_waiters: Dict[int, asyncio.Future] = {}
         self._pong_waiters: Dict[int, asyncio.Future] = {}
+        self._emotion_list_waiters: Dict[int, asyncio.Future] = {}
         self._status_callback = status_callback
         self._next_time_sync_monotonic = 0.0
 
@@ -68,6 +69,10 @@ class BleClient:
                 if not fut.done():
                     fut.set_result(False)
             waiters.clear()
+        for fut in self._emotion_list_waiters.values():
+            if not fut.done():
+                fut.set_result([])
+        self._emotion_list_waiters.clear()
 
     def _on_notify(self, _sender, data: bytearray) -> None:
         text = bytes(data).decode("utf-8", errors="ignore").strip()
@@ -82,6 +87,19 @@ class BleClient:
                     seq = int(parts[1]) & 0xFF
                     ok = parts[2].strip().upper() in ("1", "OK", "TRUE")
                     self._resolve_waiter(self._ack_waiters, seq, ok)
+                except ValueError:
+                    pass
+            return
+
+        if text.startswith("EMOTIONS:"):
+            parts = text.split(":", 2)
+            if len(parts) == 3:
+                try:
+                    seq = int(parts[1]) & 0xFF
+                    names = [n.strip() for n in parts[2].split(",") if n.strip()]
+                    fut = self._emotion_list_waiters.pop(seq, None)
+                    if fut and not fut.done():
+                        fut.set_result(names)
                 except ValueError:
                     pass
             return
@@ -304,6 +322,22 @@ class BleClient:
 
     async def load_tuning(self) -> bool:
         return await self.send_command_payload("TUNE_LOAD:1")
+
+    async def request_emotion_list(self, timeout: float = 3.0) -> list:
+        if not self.is_connected or not self._notify_enabled:
+            return []
+        seq = self._next_seq()
+        fut = asyncio.get_running_loop().create_future()
+        self._emotion_list_waiters[seq] = fut
+        try:
+            await self._write_text(f"LIST_EMOTIONS:{seq}")
+            result = await asyncio.wait_for(fut, timeout=timeout)
+            return result if result else []
+        except Exception as exc:
+            LOG.warning("emotion list request failed: %s", exc)
+            return []
+        finally:
+            self._emotion_list_waiters.pop(seq, None)
 
     async def factory_reset(self) -> bool:
         return await self.send_command_payload("FACTORY_RESET:1")

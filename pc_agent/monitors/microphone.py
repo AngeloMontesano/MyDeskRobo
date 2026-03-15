@@ -2,7 +2,7 @@ import asyncio
 import logging
 
 from config import MIC_APPS, MIC_PEAK_THRESHOLD, MIC_POLL_S
-from monitors import Emotion, RoboEvent
+from monitors import RoboEvent
 
 LOG = logging.getLogger("microphone")
 
@@ -41,7 +41,7 @@ async def run(queue: asyncio.Queue):
         if active and not was_active:
             await queue.put(
                 RoboEvent(
-                    emotion=Emotion.HAPPY,
+                    event_name="MIC_ACTIVE",
                     priority=4,
                     duration_ms=0,
                     source="mic",
@@ -51,7 +51,7 @@ async def run(queue: asyncio.Queue):
         elif not active and was_active:
             await queue.put(
                 RoboEvent(
-                    emotion=Emotion.IDLE,
+                    event_name="MIC_INACTIVE",
                     priority=1,
                     duration_ms=0,
                     source="mic",

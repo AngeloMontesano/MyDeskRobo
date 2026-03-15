@@ -7,29 +7,11 @@ LOG = logging.getLogger("monitor")
 
 @dataclass
 class RoboEvent:
-    emotion: int
+    event_name: str   # e.g. "PC_MAIL", "PC_CALL", "MIC_ACTIVE"
     priority: int
     duration_ms: int
     source: str
     description: str
-
-
-class Emotion:
-    IDLE = 0
-    HAPPY = 1
-    SAD = 2
-    ANGRY = 3
-    SURPRISED = 4
-    SLEEPY = 5
-    WINK = 6
-    LOVE = 7
-    CALL = 10
-    EMAIL = 11
-    TEAMS_MSG = 12
-    CALENDAR = 13
-    NOTIFY = 14
-    LOCK = 15
-    WIFI = 16
 
 
 async def safe_monitor(coro_func, queue: asyncio.Queue, name: str):

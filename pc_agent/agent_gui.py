@@ -1,52 +1,34 @@
 import asyncio
+import json
 import queue
 import threading
 import tkinter as tk
 from datetime import datetime
+from pathlib import Path
 from tkinter import colorchooser, messagebox, ttk
+from typing import Dict
 
 import pc_agent as agent_runtime
+from config import DEFAULT_EVENT_MAPPING
 
-
+# Fallback emotion list used until the device responds to LIST_EMOTIONS
 BASE_EMOTIONS = [
-    "IDLE",
-    "HAPPY",
-    "SAD",
-    "ANGRY_SOFT",
-    "ANGRY",
-    "ANGRY_HARD",
-    "WOW",
-    "SLEEPY",
-    "CONFUSED",
-    "MAIL",
-    "CALL",
-    "SHAKE",
-    "WINK",
-    "XX",
-    "GLITCH",
+    "IDLE", "HAPPY", "SAD", "ANGRY_SOFT", "ANGRY", "ANGRY_HARD",
+    "WOW", "SLEEPY", "CONFUSED", "EXCITED", "DIZZY",
+    "MAIL", "CALL", "SHAKE", "WINK", "XX", "GLITCH",
+    "SKEPTICAL", "BORED", "FOCUSED",
 ]
+
 EVENTS = ["CALL", "MAIL", "TEAMS", "LOUD", "VERY_LOUD", "TILT", "SHAKE", "QUIET"]
 
 TUNE_KEYS = [
-    "drift_amp_px",
-    "saccade_amp_px",
-    "saccade_min_ms",
-    "saccade_max_ms",
-    "blink_interval_ms",
-    "blink_duration_ms",
-    "double_blink_chance_pct",
-    "glow_pulse_amp",
-    "glow_pulse_period_ms",
-    "shake_amp_px",
-    "shake_period_ms",
-    "sleep_delay_min",
-    "display_off_delay_min",
-    "eye_color_r",
-    "eye_color_g",
-    "eye_color_b",
-    "gyro_tilt_xy_pct",
-    "gyro_tilt_z_pct",
-    "gyro_tilt_cooldown_ms",
+    "drift_amp_px", "saccade_amp_px", "saccade_min_ms", "saccade_max_ms",
+    "blink_interval_ms", "blink_duration_ms", "double_blink_chance_pct",
+    "glow_pulse_amp", "glow_pulse_period_ms",
+    "shake_amp_px", "shake_period_ms",
+    "sleep_delay_min", "display_off_delay_min",
+    "eye_color_r", "eye_color_g", "eye_color_b",
+    "gyro_tilt_xy_pct", "gyro_tilt_z_pct", "gyro_tilt_cooldown_ms",
 ]
 
 TUNE_DEFAULTS = {
@@ -57,7 +39,7 @@ TUNE_DEFAULTS = {
     "blink_interval_ms": "3600",
     "blink_duration_ms": "120",
     "double_blink_chance_pct": "20",
-    "glow_pulse_amp": "6",
+    "glow_pulse_amp": "9",
     "glow_pulse_period_ms": "2600",
     "shake_amp_px": "24",
     "shake_period_ms": "700",
@@ -70,6 +52,41 @@ TUNE_DEFAULTS = {
     "gyro_tilt_z_pct": "64",
     "gyro_tilt_cooldown_ms": "2200",
 }
+
+MAPPING_PATH = Path.home() / ".deskrobo_mapping.json"
+
+# Human-readable labels for event names (for the mapping tab)
+EVENT_NAME_LABELS: Dict[str, str] = {
+    "PC_MAIL":        "E-Mail erhalten",
+    "PC_CALL":        "Eingehender Anruf",
+    "PC_TEAMS":       "Teams Nachricht",
+    "PC_CALL_ACTIVE": "Anruf verbunden",
+    "PC_CALENDAR":    "Kalendertermin",
+    "MIC_ACTIVE":     "Mikrofon aktiv",
+    "MIC_INACTIVE":   "Mikrofon inaktiv",
+}
+
+
+def _load_mapping() -> Dict:
+    if MAPPING_PATH.exists():
+        try:
+            with open(MAPPING_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                merged = DEFAULT_EVENT_MAPPING.copy()
+                merged.update(data)
+                return merged
+        except Exception:
+            pass
+    return DEFAULT_EVENT_MAPPING.copy()
+
+
+def _save_mapping(mapping: Dict) -> None:
+    try:
+        with open(MAPPING_PATH, "w", encoding="utf-8") as f:
+            json.dump(mapping, f, indent=2)
+    except Exception:
+        pass
 
 
 class AgentController:
@@ -85,11 +102,13 @@ class AgentController:
         with self._lock:
             return self._thread is not None and self._thread.is_alive()
 
-    def start(self, mode: str) -> bool:
+    def start(self, mode: str, mapping: Dict) -> bool:
         with self._lock:
             if self._thread is not None and self._thread.is_alive():
                 return False
-            self._thread = threading.Thread(target=self._run_thread, args=(mode,), daemon=True)
+            self._thread = threading.Thread(
+                target=self._run_thread, args=(mode, mapping), daemon=True
+            )
             self._thread.start()
             return True
 
@@ -112,7 +131,7 @@ class AgentController:
         except Exception:
             return False
 
-    def _run_thread(self, mode: str) -> None:
+    def _run_thread(self, mode: str, mapping: Dict) -> None:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         stop_event = asyncio.Event()
@@ -124,7 +143,11 @@ class AgentController:
             self._control_queue = control_queue
 
         def status_callback(state: str, message: str) -> None:
-            self.event_queue.put(("status", state, message))
+            # Route data responses to separate queue kinds
+            if state.startswith("data:"):
+                self.event_queue.put((state[5:], "", message))
+            else:
+                self.event_queue.put(("status", state, message))
 
         try:
             loop.run_until_complete(
@@ -133,6 +156,7 @@ class AgentController:
                     status_callback=status_callback,
                     stop_event=stop_event,
                     control_queue=control_queue,
+                    mapping=mapping,
                 )
             )
             self.event_queue.put(("stopped", "", ""))
@@ -151,11 +175,14 @@ class AgentApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("MyDeskRobo PC Agent")
-        self.root.geometry("1020x780")
-        self.root.minsize(920, 720)
+        self.root.geometry("1060x820")
+        self.root.minsize(960, 740)
 
         self.event_queue: "queue.Queue[tuple]" = queue.Queue()
         self.controller = AgentController(self.event_queue)
+
+        self._mapping: Dict = _load_mapping()
+        self._available_emotions: list = list(BASE_EMOTIONS)
 
         self.mode_var = tk.StringVar(value="all")
         self.state_var = tk.StringVar(value="Nicht gestartet")
@@ -179,53 +206,61 @@ class AgentApp:
         self.root.after(200, self._poll_events)
         self.root.after(300, self._on_start)
 
+    # ------------------------------------------------------------------ build
+
     def _build_ui(self) -> None:
         container = ttk.Frame(self.root, padding=12)
         container.pack(fill=tk.BOTH, expand=True)
 
+        # Top bar
         top = ttk.Frame(container)
         top.pack(fill=tk.X)
         ttk.Label(top, text="Agent-Modus:").pack(side=tk.LEFT)
         ttk.Combobox(
-            top,
-            textvariable=self.mode_var,
-            values=("all", "basic", "teams", "mic"),
-            width=12,
-            state="readonly",
+            top, textvariable=self.mode_var,
+            values=("all", "basic", "teams", "mic"), width=12, state="readonly",
         ).pack(side=tk.LEFT, padx=(8, 14))
-        ttk.Button(top, text="Starten", command=self._on_start).pack(side=tk.LEFT)
-        ttk.Button(top, text="Stoppen", command=self._on_stop).pack(side=tk.LEFT, padx=(8, 0))
+        self.start_btn = ttk.Button(top, text="Starten", command=self._on_start)
+        self.start_btn.pack(side=tk.LEFT)
+        self.stop_btn = ttk.Button(top, text="Stoppen", command=self._on_stop)
+        self.stop_btn.pack(side=tk.LEFT, padx=(8, 0))
         ttk.Label(top, text="all = alles, basic = Outlook + Kalender").pack(side=tk.LEFT, padx=(16, 0))
-        self.start_btn = top.winfo_children()[2]
-        self.stop_btn = top.winfo_children()[3]
 
-        status = ttk.LabelFrame(container, text="Verbindung", padding=12)
+        # Status frame with color indicator
+        status = ttk.LabelFrame(container, text="Verbindung", padding=10)
         status.pack(fill=tk.X, pady=(10, 10))
-        ttk.Label(status, textvariable=self.state_var, font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        status_row = ttk.Frame(status)
+        status_row.pack(fill=tk.X)
+        self._status_dot = tk.Label(status_row, text="●", font=("Segoe UI", 14), fg="#888888")
+        self._status_dot.pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Label(status_row, textvariable=self.state_var, font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT)
         ttk.Label(status, textvariable=self.detail_var).pack(anchor="w", pady=(4, 0))
 
+        # Tabs
         notebook = ttk.Notebook(container)
         notebook.pack(fill=tk.BOTH, expand=True)
 
         control_tab = ttk.Frame(notebook, padding=10)
+        mapping_tab = ttk.Frame(notebook, padding=10)
         tune_tab = ttk.Frame(notebook, padding=10)
         log_tab = ttk.Frame(notebook, padding=10)
 
         notebook.add(control_tab, text="Schnellsteuerung")
+        notebook.add(mapping_tab, text="Ereignis-Mapping")
         notebook.add(tune_tab, text="Verhalten & Display")
         notebook.add(log_tab, text="Protokoll")
 
         self._build_control_tab(control_tab)
+        self._build_mapping_tab(mapping_tab)
         self._build_tune_tab(tune_tab)
         self._build_log_tab(log_tab)
         self._refresh_emotion_options()
 
     def _build_control_tab(self, parent: ttk.Frame) -> None:
-        hint = ttk.Label(
+        ttk.Label(
             parent,
             text="Schnellzugriff fuer Emotionen, Display und Test-Ereignisse. Stil ist fest auf EVE gesetzt.",
-        )
-        hint.pack(anchor="w", pady=(0, 8))
+        ).pack(anchor="w", pady=(0, 8))
 
         look = ttk.LabelFrame(parent, text="Gesicht", padding=10)
         look.pack(fill=tk.X, pady=(0, 8))
@@ -236,6 +271,8 @@ class AgentApp:
         ttk.Label(look, text="Anzeigedauer (ms):").grid(row=1, column=2, sticky="w", padx=(16, 0), pady=(10, 0))
         ttk.Entry(look, textvariable=self.emotion_hold_var, width=10).grid(row=1, column=3, sticky="w", padx=(8, 0), pady=(10, 0))
         ttk.Button(look, text="Jetzt zeigen", command=self._on_set_emotion).grid(row=1, column=4, sticky="w", padx=(12, 0), pady=(10, 0))
+        self._emotions_source_label = ttk.Label(look, text="(Emotionen: Standardliste)", foreground="#888888", font=("Segoe UI", 8))
+        self._emotions_source_label.grid(row=2, column=0, columnspan=5, sticky="w", pady=(4, 0))
 
         eyes = ttk.LabelFrame(parent, text="Linkes / rechtes Auge", padding=10)
         eyes.pack(fill=tk.X, pady=(0, 8))
@@ -259,7 +296,7 @@ class AgentApp:
         ttk.Button(display, text="Einblendung anwenden", command=self._on_set_status_label).grid(row=1, column=3, sticky="w", padx=(8, 0), pady=(10, 0))
         display.grid_columnconfigure(1, weight=1)
 
-        events = ttk.LabelFrame(parent, text="Ereignisse testen", padding=10)
+        events = ttk.LabelFrame(parent, text="Ereignisse testen (sendet direkt an Geraet)", padding=10)
         events.pack(fill=tk.X, pady=(0, 8))
         for i, ev in enumerate(EVENTS):
             ttk.Button(events, text=ev, command=lambda n=ev: self._send_event(n)).grid(
@@ -272,25 +309,50 @@ class AgentApp:
         maintenance.pack(fill=tk.X)
         ttk.Button(maintenance, text="Uhrzeit synchronisieren", command=self._on_time_sync).grid(row=0, column=0, sticky="w")
         ttk.Button(maintenance, text="Werkseinstellungen", command=self._on_factory_reset).grid(row=0, column=1, sticky="w", padx=(8, 0))
-        ttk.Label(maintenance, text="Direktbefehl (nur fuer Tests):").grid(row=1, column=0, sticky="w", pady=(12, 0))
+        ttk.Button(maintenance, text="Emotionsliste aktualisieren", command=self._on_refresh_emotions).grid(row=0, column=2, sticky="w", padx=(8, 0))
+        ttk.Label(maintenance, text="Direktbefehl:").grid(row=1, column=0, sticky="w", pady=(12, 0))
         ttk.Entry(maintenance, textvariable=self.raw_cmd_var, width=42).grid(row=1, column=1, sticky="ew", padx=(8, 8), pady=(12, 0))
         ttk.Button(maintenance, text="Direkt senden", command=self._on_raw_cmd).grid(row=1, column=2, sticky="w", pady=(12, 0))
         maintenance.grid_columnconfigure(1, weight=1)
 
-    def _style_emotions(self) -> list[str]:
-        return list(BASE_EMOTIONS)
+    def _build_mapping_tab(self, parent: ttk.Frame) -> None:
+        ttk.Label(
+            parent,
+            text="Legt fest, welche Emotion bei welchem PC-Ereignis angezeigt wird. Aenderungen werden live uebernommen.",
+        ).pack(anchor="w", pady=(0, 10))
 
-    def _refresh_emotion_options(self) -> None:
-        emos = self._style_emotions()
-        current_emo = self.emotion_var.get().strip()
-        current_left = self.left_eye_var.get().strip()
-        current_right = self.right_eye_var.get().strip()
-        self.emotion_combo.configure(values=emos)
-        self.left_eye_combo.configure(values=emos)
-        self.right_eye_combo.configure(values=emos)
-        self.emotion_var.set(current_emo if current_emo in emos else emos[0])
-        self.left_eye_var.set(current_left if current_left in emos else emos[0])
-        self.right_eye_var.set(current_right if current_right in emos else emos[0])
+        actions = ttk.Frame(parent)
+        actions.pack(fill=tk.X, pady=(0, 10))
+        ttk.Button(actions, text="Mapping speichern", command=self._on_save_mapping).pack(side=tk.LEFT)
+        ttk.Button(actions, text="Mapping zuruecksetzen", command=self._on_reset_mapping).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(actions, text="Jetzt anwenden", command=self._on_apply_mapping).pack(side=tk.LEFT, padx=(8, 0))
+
+        # Header
+        hdr = ttk.Frame(parent)
+        hdr.pack(fill=tk.X)
+        ttk.Label(hdr, text="Ereignis", width=22, anchor="w", font=("Segoe UI", 9, "bold")).grid(row=0, column=0, padx=(0, 8))
+        ttk.Label(hdr, text="Emotion", width=18, anchor="w", font=("Segoe UI", 9, "bold")).grid(row=0, column=1, padx=(0, 8))
+        ttk.Label(hdr, text="Prioritaet", width=10, anchor="w", font=("Segoe UI", 9, "bold")).grid(row=0, column=2, padx=(0, 8))
+        ttk.Label(hdr, text="Dauer (ms, 0=∞)", width=16, anchor="w", font=("Segoe UI", 9, "bold")).grid(row=0, column=3)
+        ttk.Separator(parent, orient="horizontal").pack(fill=tk.X, pady=(4, 8))
+
+        self._mapping_rows: Dict[str, Dict[str, tk.Variable]] = {}
+        rows_frame = ttk.Frame(parent)
+        rows_frame.pack(fill=tk.X)
+
+        for row_idx, (event_name, label) in enumerate(EVENT_NAME_LABELS.items()):
+            entry = self._mapping.get(event_name, DEFAULT_EVENT_MAPPING.get(event_name, {}))
+            emo_var = tk.StringVar(value=entry.get("emotion", "IDLE"))
+            pri_var = tk.StringVar(value=str(entry.get("priority", 5)))
+            dur_var = tk.StringVar(value=str(entry.get("duration_ms", 0)))
+
+            ttk.Label(rows_frame, text=label, width=22, anchor="w").grid(row=row_idx, column=0, pady=4, padx=(0, 8))
+            combo = ttk.Combobox(rows_frame, textvariable=emo_var, values=self._available_emotions, state="readonly", width=18)
+            combo.grid(row=row_idx, column=1, pady=4, padx=(0, 8))
+            ttk.Entry(rows_frame, textvariable=pri_var, width=10).grid(row=row_idx, column=2, pady=4, padx=(0, 8))
+            ttk.Entry(rows_frame, textvariable=dur_var, width=16).grid(row=row_idx, column=3, pady=4)
+
+            self._mapping_rows[event_name] = {"emotion": emo_var, "priority": pri_var, "duration_ms": dur_var, "combo": combo}
 
     def _build_tune_tab(self, parent: ttk.Frame) -> None:
         outer = ttk.Frame(parent)
@@ -331,50 +393,11 @@ class AgentApp:
         ttk.Button(top_actions, text="Werkseinstellungen", command=self._on_factory_reset).pack(side=tk.LEFT, padx=8)
 
         groups = [
-            (
-                "Augenbewegung",
-                [
-                    "drift_amp_px",
-                    "saccade_amp_px",
-                    "saccade_min_ms",
-                    "saccade_max_ms",
-                    "shake_amp_px",
-                    "shake_period_ms",
-                ],
-            ),
-            (
-                "Blinken und Leuchten",
-                [
-                    "blink_interval_ms",
-                    "blink_duration_ms",
-                    "double_blink_chance_pct",
-                    "glow_pulse_amp",
-                    "glow_pulse_period_ms",
-                ],
-            ),
-            (
-                "Ruhezustand",
-                [
-                    "sleep_delay_min",
-                    "display_off_delay_min",
-                ],
-            ),
-            (
-                "Augenfarbe",
-                [
-                    "eye_color_r",
-                    "eye_color_g",
-                    "eye_color_b",
-                ],
-            ),
-            (
-                "Bewegungssensor",
-                [
-                    "gyro_tilt_xy_pct",
-                    "gyro_tilt_z_pct",
-                    "gyro_tilt_cooldown_ms",
-                ],
-            ),
+            ("Augenbewegung", ["drift_amp_px", "saccade_amp_px", "saccade_min_ms", "saccade_max_ms", "shake_amp_px", "shake_period_ms"]),
+            ("Blinken und Leuchten", ["blink_interval_ms", "blink_duration_ms", "double_blink_chance_pct", "glow_pulse_amp", "glow_pulse_period_ms"]),
+            ("Ruhezustand", ["sleep_delay_min", "display_off_delay_min"]),
+            ("Augenfarbe", ["eye_color_r", "eye_color_g", "eye_color_b"]),
+            ("Bewegungssensor", ["gyro_tilt_xy_pct", "gyro_tilt_z_pct", "gyro_tilt_cooldown_ms"]),
         ]
 
         labels = {
@@ -426,9 +449,101 @@ class AgentApp:
         ttk.Button(presets, text="Lebhaft", command=lambda: self._apply_tune_preset("lively")).pack(side=tk.LEFT)
 
     def _build_log_tab(self, parent: ttk.Frame) -> None:
+        toolbar = ttk.Frame(parent)
+        toolbar.pack(fill=tk.X, pady=(0, 4))
+        ttk.Button(toolbar, text="Log leeren", command=self._clear_log).pack(side=tk.RIGHT)
+
         self.log_text = tk.Text(parent, wrap="word", state="disabled")
+        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=self.log_text.yview)
+        self.log_text.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.log_text.pack(fill=tk.BOTH, expand=True)
         self._append_log("GUI bereit. Der Agent startet automatisch im Modus 'all'.")
+
+    # ------------------------------------------------------------------ emotion list
+
+    def _refresh_emotion_options(self) -> None:
+        emos = self._available_emotions
+        current_emo = self.emotion_var.get().strip()
+        current_left = self.left_eye_var.get().strip()
+        current_right = self.right_eye_var.get().strip()
+        self.emotion_combo.configure(values=emos)
+        self.left_eye_combo.configure(values=emos)
+        self.right_eye_combo.configure(values=emos)
+        self.emotion_var.set(current_emo if current_emo in emos else emos[0])
+        self.left_eye_var.set(current_left if current_left in emos else emos[0])
+        self.right_eye_var.set(current_right if current_right in emos else emos[0])
+        # Also update mapping tab combos
+        if hasattr(self, "_mapping_rows"):
+            for row_data in self._mapping_rows.values():
+                combo = row_data.get("combo")
+                if combo:
+                    combo.configure(values=emos)
+
+    def _on_emotion_list_received(self, names_str: str) -> None:
+        names = [n.strip() for n in names_str.split(",") if n.strip()]
+        if names:
+            self._available_emotions = names
+            self._refresh_emotion_options()
+            self._emotions_source_label.configure(
+                text=f"(Emotionen vom Geraet: {len(names)} geladen)", foreground="#2a7a2a"
+            )
+            self._append_log(f"Emotionsliste vom Geraet empfangen: {', '.join(names)}")
+
+    def _on_refresh_emotions(self) -> None:
+        if self._send("list_emotions"):
+            self._append_log("Emotionsliste vom Geraet angefragt...")
+
+    # ------------------------------------------------------------------ mapping tab handlers
+
+    def _collect_mapping_from_ui(self) -> Dict:
+        result = {}
+        for event_name, row_data in self._mapping_rows.items():
+            try:
+                priority = int(row_data["priority"].get().strip())
+            except ValueError:
+                priority = DEFAULT_EVENT_MAPPING.get(event_name, {}).get("priority", 5)
+            try:
+                duration_ms = int(row_data["duration_ms"].get().strip())
+            except ValueError:
+                duration_ms = 0
+            result[event_name] = {
+                "emotion": row_data["emotion"].get().strip() or "IDLE",
+                "priority": priority,
+                "duration_ms": duration_ms,
+            }
+        return result
+
+    def _on_save_mapping(self) -> None:
+        self._mapping = self._collect_mapping_from_ui()
+        _save_mapping(self._mapping)
+        self._on_apply_mapping()
+        self._append_log(f"Ereignis-Mapping gespeichert nach {MAPPING_PATH}")
+
+    def _on_reset_mapping(self) -> None:
+        confirmed = messagebox.askyesno(
+            "Mapping zuruecksetzen",
+            "Alle Ereignis-Zuordnungen auf Standardwerte zuruecksetzen?",
+            parent=self.root,
+        )
+        if not confirmed:
+            return
+        self._mapping = DEFAULT_EVENT_MAPPING.copy()
+        for event_name, row_data in self._mapping_rows.items():
+            entry = DEFAULT_EVENT_MAPPING.get(event_name, {})
+            row_data["emotion"].set(entry.get("emotion", "IDLE"))
+            row_data["priority"].set(str(entry.get("priority", 5)))
+            row_data["duration_ms"].set(str(entry.get("duration_ms", 0)))
+        self._on_apply_mapping()
+        self._append_log("Ereignis-Mapping auf Standardwerte zurueckgesetzt.")
+
+    def _on_apply_mapping(self) -> None:
+        mapping = self._collect_mapping_from_ui()
+        self._mapping = mapping
+        if self._send("update_mapping", mapping):
+            self._append_log("Ereignis-Mapping live angewendet.")
+
+    # ------------------------------------------------------------------ log
 
     def _append_log(self, line: str) -> None:
         ts = datetime.now().strftime("%H:%M:%S")
@@ -437,11 +552,35 @@ class AgentApp:
         self.log_text.see(tk.END)
         self.log_text.configure(state="disabled")
 
+    def _clear_log(self) -> None:
+        self.log_text.configure(state="normal")
+        self.log_text.delete("1.0", tk.END)
+        self.log_text.configure(state="disabled")
+
+    # ------------------------------------------------------------------ status
+
     def _set_state(self, state: str, detail: str = "") -> None:
         self.state_var.set(state)
         self.detail_var.set(detail)
 
-    def _friendly_status(self, state: str, message: str) -> tuple[str, str]:
+    def _set_dot_color(self, state: str) -> None:
+        colors = {
+            "Verbunden": "#22bb44",
+            "Verbinde": "#f5a623",
+            "Suche MyDeskRobo": "#f5a623",
+            "Startet": "#f5a623",
+            "Neuversuch": "#f5a623",
+            "Verbindung instabil": "#e05050",
+            "MyDeskRobo nicht gefunden": "#e05050",
+            "Fehler": "#e05050",
+            "Gestoppt": "#888888",
+            "Stoppt": "#888888",
+            "Nicht gestartet": "#888888",
+        }
+        color = colors.get(state, "#888888")
+        self._status_dot.configure(fg=color)
+
+    def _friendly_status(self, state: str, message: str) -> tuple:
         mapping = {
             "starting": "Startet",
             "searching": "Suche MyDeskRobo",
@@ -457,6 +596,8 @@ class AgentApp:
         detail = (message or "").replace("DeskRobo", "MyDeskRobo")
         return mapping.get(state, state), detail
 
+    # ------------------------------------------------------------------ send helpers
+
     def _send(self, *cmd) -> bool:
         if not self.controller.is_running():
             self._append_log("Befehl nicht gesendet: Agent ist nicht gestartet.")
@@ -466,9 +607,11 @@ class AgentApp:
             self._append_log("Befehl konnte nicht in die Queue gelegt werden.")
         return ok
 
+    # ------------------------------------------------------------------ control actions
+
     def _on_start(self) -> None:
         mode = self.mode_var.get().strip() or "all"
-        if self.controller.start(mode):
+        if self.controller.start(mode, dict(self._mapping)):
             self._set_state("Startet", f"Modus: {mode}")
             self._append_log(f"Agent gestartet (Modus: {mode}).")
         else:
@@ -537,6 +680,8 @@ class AgentApp:
         if self._send("cmd", payload):
             self._append_log(f"Direktbefehl gesendet: {payload}")
 
+    # ------------------------------------------------------------------ tune actions
+
     def _apply_tune_preset(self, name: str) -> None:
         presets = {
             "calm": {
@@ -549,7 +694,7 @@ class AgentApp:
             "balanced": {
                 "drift_amp_px": 2, "saccade_amp_px": 3, "saccade_min_ms": 2600, "saccade_max_ms": 5200,
                 "blink_interval_ms": 3600, "blink_duration_ms": 120, "double_blink_chance_pct": 20,
-                "glow_pulse_amp": 6, "glow_pulse_period_ms": 2600, "shake_amp_px": 24, "shake_period_ms": 700,
+                "glow_pulse_amp": 9, "glow_pulse_period_ms": 2600, "shake_amp_px": 24, "shake_period_ms": 700,
                 "sleep_delay_min": 10, "display_off_delay_min": 15,
                 "gyro_tilt_xy_pct": 62, "gyro_tilt_z_pct": 64, "gyro_tilt_cooldown_ms": 2200,
             },
@@ -600,12 +745,7 @@ class AgentApp:
         self._sync_rgb_from_eye_color_hex()
 
     def _apply_eye_color_preset(self, name: str) -> None:
-        presets = {
-            "eve": "#0fdaff",
-            "ice": "#b8ecff",
-            "warm": "#ffe6a8",
-            "terminal": "#72ff9a",
-        }
+        presets = {"eve": "#0fdaff", "ice": "#b8ecff", "warm": "#ffe6a8", "terminal": "#72ff9a"}
         value = presets.get(name)
         if not value:
             return
@@ -653,6 +793,8 @@ class AgentApp:
         if self._send("tune_load"):
             self._append_log("Gespeicherte Werte auf dem Geraet aktiviert.")
 
+    # ------------------------------------------------------------------ poll + misc
+
     def _update_buttons(self) -> None:
         running = self.controller.is_running()
         self.start_btn.configure(state=("disabled" if running else "normal"))
@@ -661,19 +803,31 @@ class AgentApp:
     def _poll_events(self) -> None:
         while True:
             try:
-                kind, state, message = self.event_queue.get_nowait()
+                item = self.event_queue.get_nowait()
             except queue.Empty:
                 break
 
-            if kind == "status":
+            kind = item[0]
+            state = item[1] if len(item) > 1 else ""
+            message = item[2] if len(item) > 2 else ""
+
+            if kind == "emotion_list":
+                self._on_emotion_list_received(message)
+            elif kind == "status":
                 title, detail = self._friendly_status(state, message)
                 self._set_state(title, detail)
+                self._set_dot_color(title)
                 self._append_log(f"{title}: {detail}" if detail else title)
+                # After connecting, request emotion list from device
+                if state == "connected":
+                    self.root.after(800, lambda: self._send("list_emotions"))
             elif kind == "error":
                 self._set_state("Fehler", message)
+                self._set_dot_color("Fehler")
                 self._append_log(f"Fehler: {message}")
             elif kind == "stopped":
                 self._set_state("Gestoppt", "")
+                self._set_dot_color("Gestoppt")
                 self._append_log("Agent wurde beendet.")
 
         self._update_buttons()

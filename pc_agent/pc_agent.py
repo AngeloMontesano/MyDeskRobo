@@ -1,11 +1,12 @@
 import argparse
 import asyncio
 import logging
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Dict, Optional
 
 from ble_client import BleClient
+from config import DEFAULT_EVENT_MAPPING
 from dispatch import Dispatcher
-from monitors import Emotion, RoboEvent, safe_monitor
+from monitors import RoboEvent, safe_monitor
 from monitors import calendar_mon, microphone, outlook, teams
 
 StatusCallback = Optional[Callable[[str, str], None]]
@@ -25,7 +26,6 @@ def _emit_status(status_callback: StatusCallback, state: str, message: str = "")
     try:
         status_callback(state, message)
     except Exception:
-        # UI/log callbacks must never stop the agent runtime.
         pass
 
 
@@ -35,7 +35,12 @@ async def dispatch_loop(queue: asyncio.Queue, dispatcher: Dispatcher):
         await dispatcher.handle(event)
 
 
-async def control_loop(control_queue: asyncio.Queue, ble: BleClient):
+async def control_loop(
+    control_queue: asyncio.Queue,
+    ble: BleClient,
+    dispatcher: Dispatcher,
+    status_callback: StatusCallback,
+):
     while True:
         cmd = await control_queue.get()
         if not isinstance(cmd, tuple) or len(cmd) < 1:
@@ -67,18 +72,28 @@ async def control_loop(control_queue: asyncio.Queue, ble: BleClient):
                 await ble.factory_reset()
             elif name == "cmd" and len(cmd) == 2:
                 await ble.send_command_payload(str(cmd[1]))
+            elif name == "list_emotions":
+                names = await ble.request_emotion_list()
+                if names and status_callback:
+                    _emit_status(status_callback, "data:emotion_list", ",".join(names))
+            elif name == "update_mapping" and len(cmd) == 2:
+                mapping: Dict = cmd[1]
+                if isinstance(mapping, dict):
+                    dispatcher.mapping = mapping
         except Exception:
             logging.exception("control command failed: %s", cmd)
+
 
 async def run(
     mode: str,
     status_callback: StatusCallback = None,
     stop_event: Optional[asyncio.Event] = None,
     control_queue: Optional[asyncio.Queue[Any]] = None,
+    mapping: Optional[Dict] = None,
 ):
     queue: asyncio.Queue[RoboEvent] = asyncio.Queue()
     ble = BleClient(status_callback=status_callback)
-    dispatcher = Dispatcher(ble)
+    dispatcher = Dispatcher(ble, mapping if mapping is not None else DEFAULT_EVENT_MAPPING.copy())
 
     _emit_status(status_callback, "starting", f"Agent startet im Modus: {mode}")
 
@@ -95,7 +110,7 @@ async def run(
 
     tasks.append(asyncio.create_task(dispatch_loop(queue, dispatcher)))
     if control_queue is not None:
-        tasks.append(asyncio.create_task(control_loop(control_queue, ble)))
+        tasks.append(asyncio.create_task(control_loop(control_queue, ble, dispatcher, status_callback)))
 
     try:
         if stop_event is None:
@@ -122,7 +137,6 @@ async def run(
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Graceful shutdown: send IDLE then disconnect.
         if ble.is_connected:
             await ble.set_emotion_named("IDLE", 1500)
         await ble.disconnect()
@@ -137,7 +151,7 @@ def parse_args():
         default="basic",
         help="basic=outlook+calendar, all=all monitors",
     )
-    p.add_argument("--send", type=int, default=None, help="one-shot emotion byte")
+    p.add_argument("--send", type=int, default=None, help="one-shot emotion byte (legacy)")
     p.add_argument("--style", type=str, default=None, help="set eye style (EVE/EVE_CINEMATIC)")
     p.add_argument("--backlight", type=int, default=None, help="set backlight 0..100")
     p.add_argument("--status-label", choices=["on", "off"], default=None, help="show/hide bottom status label")
@@ -158,7 +172,8 @@ async def main():
         ble = BleClient()
         try:
             await ble.connect()
-            await ble.send_emotion(args.send)
+            # Legacy: map byte to named emotion for compatibility
+            await ble.send_command_payload(f"EMO:1:{args.send}")
             await asyncio.sleep(0.5)
         finally:
             await ble.disconnect()
@@ -228,4 +243,3 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         pass
-

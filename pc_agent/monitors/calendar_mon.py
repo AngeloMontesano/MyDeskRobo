@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timedelta
 
 from config import CALENDAR_POLL_S, CALENDAR_WARN_MIN
-from monitors import Emotion, RoboEvent
+from monitors import RoboEvent
 
 LOG = logging.getLogger("calendar")
 HAS_WIN32 = importlib.util.find_spec("pythoncom") is not None and importlib.util.find_spec("win32com") is not None
@@ -55,7 +55,6 @@ async def run(queue: asyncio.Queue):
         now = datetime.now()
         for subject, start in events:
             key = f"{subject}|{start}"
-            # Outlook can return timezone-aware starts on some systems/profiles.
             if getattr(start, "tzinfo", None) is not None:
                 now_cmp = datetime.now(start.tzinfo)
             else:
@@ -65,7 +64,7 @@ async def run(queue: asyncio.Queue):
                 _NOTIFIED.add(key)
                 await queue.put(
                     RoboEvent(
-                        emotion=Emotion.CALENDAR,
+                        event_name="PC_CALENDAR",
                         priority=8,
                         duration_ms=10000,
                         source="calendar",

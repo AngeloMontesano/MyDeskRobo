@@ -31,3 +31,16 @@ MIC_APPS = ["Teams.exe", "ms-teams.exe", "zoom.exe"]
 
 # Teams log path
 TEAMS_LOG_PATH = Path.home() / "AppData" / "Roaming" / "Microsoft" / "Teams" / "logs.txt"
+
+# Default event → emotion mapping.
+# Keys are event_name strings emitted by monitors.
+# Values: emotion (device name), priority, duration_ms (0 = no auto-reset).
+DEFAULT_EVENT_MAPPING: dict = {
+    "PC_MAIL":          {"emotion": "MAIL",      "priority": 7,  "duration_ms": 8000},
+    "PC_CALL":          {"emotion": "CALL",       "priority": 10, "duration_ms": 0},
+    "PC_TEAMS":         {"emotion": "CONFUSED",   "priority": 6,  "duration_ms": 8000},
+    "PC_CALL_ACTIVE":   {"emotion": "EXCITED",    "priority": 8,  "duration_ms": 5000},
+    "PC_CALENDAR":      {"emotion": "WOW",        "priority": 8,  "duration_ms": 10000},
+    "MIC_ACTIVE":       {"emotion": "HAPPY",      "priority": 4,  "duration_ms": 0},
+    "MIC_INACTIVE":     {"emotion": "IDLE",       "priority": 1,  "duration_ms": 0},
+}

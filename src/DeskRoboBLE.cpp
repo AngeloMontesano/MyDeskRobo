@@ -444,6 +444,19 @@ void handleTextCommand(String cmd) {
     notifyAck(seq, ok);
     return;
   }
+  if (u.startsWith("LIST_EMOTIONS:")) {
+    uint32_t seq = 0;
+    if (parseUint32Strict(u.substring(14), seq)) {
+      static const char kEmotionList[] =
+          "IDLE,HAPPY,SAD,ANGRY,ANGRY_SOFT,ANGRY_HARD,WOW,SLEEPY,CONFUSED,"
+          "EXCITED,DIZZY,MAIL,CALL,SHAKE,WINK,XX,GLITCH,SKEPTICAL,BORED,FOCUSED";
+      char buf[280];
+      snprintf(buf, sizeof(buf), "EMOTIONS:%lu:%s", (unsigned long)seq, kEmotionList);
+      notifyText(buf);
+    }
+    return;
+  }
+
   if (u.startsWith("EVENT:")) {
     const String name = u.substring(6);
     DeskRoboEventType ev;
