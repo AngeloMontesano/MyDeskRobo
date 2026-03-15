@@ -28,6 +28,7 @@
 #include "scenes/eve_bored.h"
 #include "scenes/eve_focused.h"
 #include "scenes/eve_happy_tongue.h"
+#include "scenes/eve_hollow.h"
 
 using namespace nse;
 
@@ -185,6 +186,7 @@ const char *emotion_name(DeskRoboEmotion emotion) {
     case DESKROBO_EMOTION_BORED: return "BORED";
     case DESKROBO_EMOTION_FOCUSED: return "FOCUSED";
     case DESKROBO_EMOTION_HAPPY_TONGUE: return "HAPPY_TONGUE";
+    case DESKROBO_EMOTION_SUNGLASSES_ROUND: return "HOLLOW";
     default: return "IDLE";
   }
 }
@@ -237,6 +239,7 @@ const EyeSceneSpec &scene_for_emotion(DeskRoboEmotion emotion, DeskRoboFaceStyle
     case DESKROBO_EMOTION_BORED: return kEveBoredScene;
     case DESKROBO_EMOTION_FOCUSED: return kEveFocusedScene;
     case DESKROBO_EMOTION_HAPPY_TONGUE: return kEveHappyTongueScene;
+    case DESKROBO_EMOTION_SUNGLASSES_ROUND: return kEveSunglassesRoundScene;
     case DESKROBO_EMOTION_IDLE:
     default:
       return kEveIdleScene;

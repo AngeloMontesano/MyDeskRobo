@@ -105,6 +105,7 @@ bool parseEmotion(const String &name, DeskRoboEmotion &out) {
   else if (name == "BORED") out = DESKROBO_EMOTION_BORED;
   else if (name == "FOCUSED") out = DESKROBO_EMOTION_FOCUSED;
   else if (name == "HAPPY_TONGUE") out = DESKROBO_EMOTION_HAPPY_TONGUE;
+  else if (name == "HOLLOW") out = DESKROBO_EMOTION_SUNGLASSES_ROUND;
   else if (name.startsWith("ANGRY_")) out = DESKROBO_EMOTION_ANGRY;
   else if (name.startsWith("SAD_")) out = DESKROBO_EMOTION_SAD;
   else return false;
@@ -449,7 +450,7 @@ void handleTextCommand(String cmd) {
     if (parseUint32Strict(u.substring(14), seq)) {
       static const char kEmotionList[] =
           "IDLE,HAPPY,SAD,ANGRY,ANGRY_SOFT,ANGRY_HARD,WOW,SLEEPY,CONFUSED,"
-          "DIZZY,MAIL,CALL,SHAKE,WINK,XX,GLITCH,BORED,FOCUSED,HAPPY_TONGUE";
+          "DIZZY,MAIL,CALL,SHAKE,WINK,XX,GLITCH,BORED,FOCUSED,HAPPY_TONGUE,HOLLOW";
       char buf[280];
       snprintf(buf, sizeof(buf), "EMOTIONS:%lu:%s", (unsigned long)seq, kEmotionList);
       notifyText(buf);
