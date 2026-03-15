@@ -1,37 +1,47 @@
 # MyDeskRobo
 
-MyDeskRobo is an ESP32-S3 desk companion for the Waveshare ESP32-S3-LCD-1.85.
-The current public release uses the new `MyDeskRoboEngine` renderer, BLE control and the Windows PC agent GUI.
+MyDeskRobo is an ESP32-S3 desk companion for the Waveshare ESP32-S3-LCD-1.85 (round display, 360×360, no touch).
+The firmware renders animated eyes on the display and reacts to audio, motion (IMU) and BLE commands from a Windows PC agent.
 
 ## Current Release Scope
 
 Included:
 - firmware target `esp32-s3-mydeskrobo-full`
-- EVE-based face pipeline
-- BLE control path
-- Windows PC agent and GUI
+- EVE face renderer (`MyDeskRoboEngine`) — canvas-based, single color per eye
+- BLE control path (PC agent ↔ device)
+- Windows PC agent and GUI with demo mode
 - boot splash: `My Robo Desk v0.5`
-- runtime tuning for eye motion, eye color, sleep and display-off timing
-- local shake detection via gyro
-
+- 20 emotions with animated transitions (fade-to-black between scenes)
+- idle round-robin: spontaneous emotion changes after inactivity
+- micro-expressions: random brief expressions during idle
+- knock / shake detection via QMI8658 IMU (optional, requires build flag)
+- runtime tuning for eye motion, eye color, blink, glow, sleep and display-off timing
+- screensaver / display-off after configurable idle timeout
 
 ## Supported Emotions
 
-- `IDLE`
-- `HAPPY`
-- `SAD`
-- `ANGRY`
-- `ANGRY_SOFT`
-- `ANGRY_HARD`
-- `WOW`
-- `SLEEPY`
-- `CONFUSED`
-- `SHAKE`
-- `WINK`
-- `XX`
-- `GLITCH`
-- `MAIL`
-- `CALL`
+| BLE name | Description |
+|----------|-------------|
+| `IDLE` | default resting face |
+| `HAPPY` | happy eyes |
+| `SAD` | sad eyes |
+| `ANGRY` | hard angry (alias for ANGRY_HARD) |
+| `ANGRY_SOFT` | soft angry |
+| `ANGRY_HARD` | hard scowl, no pupils |
+| `WOW` | wide surprised eyes |
+| `SLEEPY` | drooping eyelids |
+| `CONFUSED` | questioning look with ?? overlay |
+| `DIZZY` | X-eyes (cartoon KO look) |
+| `MAIL` | mail notification (alias for CONFUSED) |
+| `CALL` | incoming call look |
+| `SHAKE` | chaotic eye jitter |
+| `WINK` | right eye winks (animated close → hold → open) |
+| `XX` | defeated X eyes |
+| `GLITCH` | glitch FX with red color flash |
+| `BORED` | slow eye-roll upward |
+| `FOCUSED` | pupils scan left→right together |
+| `HAPPY_TONGUE` | happy + red tongue |
+| `HOLLOW` | glowing ring iris |
 
 ## For Users
 
@@ -48,10 +58,10 @@ That document explains:
 
 ## Repository Layout
 
-- `src/` firmware entry points and runtime bridge
-- `MyDeskRoboEngine/` face renderer and scene definitions
-- `pc_agent/` Windows BLE agent and GUI
-- `docs/` technical and maintenance documentation
+- `src/` — firmware entry points and runtime bridge
+- `MyDeskRoboEngine/` — face renderer and scene definitions
+- `pc_agent/` — Windows BLE agent and GUI
+- `docs/` — technical and maintenance documentation
 
 ## Validation
 
@@ -65,7 +75,7 @@ chcp 65001 > $null
 
 Python check:
 ```powershell
-python -m py_compile pc_agent\pc_agent.py pc_agent\agent_gui.py pc_agent\ble_client.py
+python -m py_compile pc_agent\pc_agent.py pc_agent\agent_gui.py pc_agent\ble_client.py pc_agent\dispatch.py
 ```
 
 ## Documentation

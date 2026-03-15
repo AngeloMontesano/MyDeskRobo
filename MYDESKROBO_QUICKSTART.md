@@ -82,10 +82,10 @@ Expected runtime behavior:
 - BLE starts automatically
 - no Wi-Fi setup is required for the current release
 - `IDLE` is the base state
-- after inactivity, the idle rotation starts automatically
+- after inactivity, the idle rotation cycles through emotions automatically
 - after about 10 minutes without BLE activity, sleepy/screensaver behavior begins
 - after about 15 minutes, the display can turn off
-- shaking wakes the device and plays the shake animation
+- a short knock triggers the next idle emotion, a sustained shake plays the shake animation (requires `DESKROBO_ENABLE_GYRO=1` build flag)
 
 ## 8. PC Agent GUI
 
@@ -103,9 +103,12 @@ Start GUI:
 
 What the GUI is for:
 - send emotions over BLE
+- run demo mode (cycles all emotions automatically)
+- set left/right eye independently (eye-pair mode)
 - set eye color
 - change motion and blink tuning
 - change sleep/display timers
+- map PC events (mail, call, Teams) to emotions
 - factory reset the device
 
 ## 9. If Flashing Fails
@@ -137,5 +140,5 @@ chcp 65001 > $null
 
 Python validation:
 ```powershell
-python -m py_compile pc_agent\pc_agent.py pc_agent\agent_gui.py pc_agent\ble_client.py
+python -m py_compile pc_agent\pc_agent.py pc_agent\agent_gui.py pc_agent\ble_client.py pc_agent\dispatch.py
 ```

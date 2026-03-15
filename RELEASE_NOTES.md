@@ -25,10 +25,7 @@ Current branding:
 
 - Wi-Fi setup flow
 - web frontend
-- OTA over browser
-- legacy `anime_face` renderer
-- old style families like `FLUX`
-- old public `ANGRY_1..10` / `SAD_1..10` variants
+
 
 ## Validation
 

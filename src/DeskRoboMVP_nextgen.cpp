@@ -117,8 +117,18 @@ uint32_t g_next_rr_interval_ms = 15000;
 uint32_t g_micro_expr_next_ms = 0;
 
 DeskRoboEmotion g_current_emotion = DESKROBO_EMOTION_IDLE;
+DeskRoboEmotion g_render_emotion  = DESKROBO_EMOTION_IDLE;  // trails g_current_emotion by one fade
 DeskRoboEmotion g_left_eye_emotion = DESKROBO_EMOTION_IDLE;
 DeskRoboEmotion g_right_eye_emotion = DESKROBO_EMOTION_IDLE;
+
+static uint32_t g_fade_start_ms = 0;
+static constexpr uint32_t kFadeHalfMs = 80; // 80 ms fade-out + 80 ms fade-in = 160 ms total
+// Wink: right eye closes and opens without any scene switch.
+static uint32_t g_wink_start_ms = 0;
+static constexpr uint32_t kWinkCloseMs = 80;   // fade out right eye
+static constexpr uint32_t kWinkHoldMs  = 70;   // hold closed
+static constexpr uint32_t kWinkOpenMs  = 150;  // fade in right eye
+static constexpr uint32_t kWinkTotalMs = kWinkCloseMs + kWinkHoldMs + kWinkOpenMs; // 300 ms
 DeskRoboFaceStyle g_style = DESKROBO_STYLE_EVE;
 uint8_t g_current_priority = 0;
 uint32_t g_emotion_expiry_ms = 0;
@@ -460,11 +470,6 @@ RuntimeState make_runtime_state(const EyeSceneSpec &scene, lv_color_t color, boo
       g_pupil.y = (int16_t)random(-6, 7);
       g_pupil.next_jitter_ms = now + (uint32_t)random(50, 90);
     }
-  } else if (strcmp(scene.name, "eve_angry_hard") == 0) {
-    // Pupils converge inward + slightly upward — intensifies the hard scowl.
-    // mirror_x_for_right on the Pupil op causes side_x() to negate pupil_x for the right eye.
-    g_pupil.x = 9;
-    g_pupil.y = -4;
   } else if (strcmp(scene.name, "eve_bored") == 0) {
     // Eye-roll: pupils drift upward over 2500 ms then snap back; 6000 ms total cycle.
     const uint32_t cycle_ms  = 6000;
@@ -654,13 +659,17 @@ void maybe_idle_round_robin() {
     shuffle_idle_round();
   }
   const DeskRoboEmotion rr_emotion = g_idle_round[g_idle_round_index];
-  const uint32_t rr_show_ms = (rr_emotion == DESKROBO_EMOTION_WINK)
-      ? (uint32_t)random(400, 650)
-      : kIdleRoundRobinShowMs;
+  g_next_rr_interval_ms = (uint32_t)random(10000, 22000);
   g_current_emotion = rr_emotion;
   g_current_priority = kIdleRoundRobinPriority;
-  g_emotion_expiry_ms = now + rr_show_ms;
-  g_next_rr_interval_ms = (uint32_t)random(10000, 22000);
+  if (rr_emotion == DESKROBO_EMOTION_WINK) {
+    g_render_emotion = rr_emotion;
+    g_fade_start_ms = 0;
+    g_wink_start_ms = now;
+    g_emotion_expiry_ms = now + kWinkTotalMs + kFadeHalfMs + 40U;
+  } else {
+    g_emotion_expiry_ms = now + kIdleRoundRobinShowMs;
+  }
 }
 
 void maybe_expire_states() {
@@ -809,8 +818,28 @@ void create_ui() {
 }
 
 void render_active() {
-  const DeskRoboEmotion left_emotion = g_eye_pair_active ? g_left_eye_emotion : g_current_emotion;
-  const DeskRoboEmotion right_emotion = g_eye_pair_active ? g_right_eye_emotion : g_current_emotion;
+  const uint32_t now = millis();
+
+  // Fade-to-black transition: g_render_emotion trails g_current_emotion.
+  // Phase 1 (0..kFadeHalfMs):   fade out old scene.
+  // Phase 2 (kFadeHalfMs..2×): show new scene, fade in.
+  if (!g_eye_pair_active) {
+    if (g_fade_start_ms == 0 && g_render_emotion != g_current_emotion) {
+      g_fade_start_ms = now;
+    }
+    if (g_fade_start_ms != 0) {
+      const uint32_t el = now - g_fade_start_ms;
+      if (el >= kFadeHalfMs && g_render_emotion != g_current_emotion) {
+        g_render_emotion = g_current_emotion;
+      }
+      if (el >= kFadeHalfMs * 2) {
+        g_fade_start_ms = 0;
+      }
+    }
+  }
+
+  const DeskRoboEmotion left_emotion = g_eye_pair_active ? g_left_eye_emotion : g_render_emotion;
+  const DeskRoboEmotion right_emotion = g_eye_pair_active ? g_right_eye_emotion : g_render_emotion;
   const EyeSceneSpec &left_scene = scene_for_emotion(left_emotion, g_style);
   const EyeSceneSpec &right_scene = scene_for_emotion(right_emotion, g_style);
   update_scene_label(g_eye_pair_active ? "eye_pair" : left_scene.name);
@@ -833,6 +862,43 @@ void render_active() {
 
   RuntimeState left_state = make_runtime_state(left_scene, left_color, is_glitch_scene(left_scene));
   RuntimeState right_state = make_runtime_state(right_scene, right_color, is_glitch_scene(right_scene));
+
+  // Apply fade opacity (min 1 to avoid the "output_opa==0 means COVER" fallback).
+  if (!g_eye_pair_active && g_fade_start_ms != 0) {
+    const uint32_t el = now - g_fade_start_ms;
+    lv_opa_t fade_opa;
+    if (el < kFadeHalfMs) {
+      fade_opa = (lv_opa_t)(LV_OPA_COVER - (uint32_t)LV_OPA_COVER * el / kFadeHalfMs);
+    } else {
+      const uint32_t t = (el - kFadeHalfMs) < kFadeHalfMs ? (el - kFadeHalfMs) : kFadeHalfMs;
+      fade_opa = (lv_opa_t)((uint32_t)LV_OPA_COVER * t / kFadeHalfMs);
+    }
+    if (fade_opa < 1) fade_opa = 1;
+    left_state.output_opa  = fade_opa;
+    right_state.output_opa = fade_opa;
+  }
+
+  // Wink animation: while WINK scene is the active render scene, animate the right eye
+  // close → hold → open. Timer starts after the fade-in completes.
+  if (right_emotion == DESKROBO_EMOTION_WINK && g_wink_start_ms != 0) {
+    const uint32_t el = now - g_wink_start_ms;
+    lv_opa_t wink_opa;
+    if (el < kWinkCloseMs) {
+      wink_opa = (lv_opa_t)(LV_OPA_COVER - (uint32_t)LV_OPA_COVER * el / kWinkCloseMs);
+    } else if (el < kWinkCloseMs + kWinkHoldMs) {
+      wink_opa = 1;
+    } else if (el < kWinkTotalMs) {
+      const uint32_t t = el - kWinkCloseMs - kWinkHoldMs;
+      wink_opa = (lv_opa_t)((uint32_t)LV_OPA_COVER * t / kWinkOpenMs);
+    } else {
+      wink_opa = LV_OPA_COVER;
+    }
+    if (wink_opa < 1) wink_opa = 1;
+    right_state.output_opa = wink_opa;
+  } else if (right_emotion != DESKROBO_EMOTION_WINK) {
+    g_wink_start_ms = 0;
+  }
+
   const bool left_ok = g_left_renderer && g_left_renderer->render_eye(left_scene, left_state, false);
   const bool right_ok = g_right_renderer && g_right_renderer->render_eye(right_scene, right_state, true);
   if (!left_ok || !right_ok) {
@@ -946,8 +1012,13 @@ void DeskRobo_PushEvent(DeskRoboEventType event_type) {
     case DESKROBO_EVENT_AUDIO_LOUD: apply_event_emotion(DESKROBO_EMOTION_WOW, 60, 2500); break;
     case DESKROBO_EVENT_AUDIO_VERY_LOUD: apply_event_emotion(DESKROBO_EMOTION_SHAKE, 85, 2600); break;
     case DESKROBO_EVENT_MOTION_TILT: apply_event_emotion(DESKROBO_EMOTION_CONFUSED, 55, 2200); break;
-    case DESKROBO_EVENT_MOTION_SHAKE:
-    case DESKROBO_EVENT_MOTION_TAP: apply_event_emotion(DESKROBO_EMOTION_SHAKE, 85, 2600); break;
+    case DESKROBO_EVENT_MOTION_SHAKE: apply_event_emotion(DESKROBO_EMOTION_SHAKE, 85, 2600); break;
+    case DESKROBO_EVENT_MOTION_TAP: {
+      // Short knock: step to next emotion in the idle round.
+      g_idle_round_index = (uint8_t)((g_idle_round_index + 1) % kIdleRoundLen);
+      apply_event_emotion(g_idle_round[g_idle_round_index], 60, 5000);
+      break;
+    }
     case DESKROBO_EVENT_AUDIO_QUIET:
     case DESKROBO_EVENT_NONE:
     default: apply_event_emotion(DESKROBO_EMOTION_IDLE, 1, 1000); break;
@@ -962,6 +1033,13 @@ void DeskRobo_SetEmotion(DeskRoboEmotion emotion, uint32_t hold_ms) {
   g_eye_pair_active = false;
   g_current_emotion = emotion;
   g_current_priority = 100;
+  if (emotion == DESKROBO_EMOTION_WINK) {
+    // No fade-in: appear instantly, start wink animation immediately.
+    g_render_emotion = emotion;
+    g_fade_start_ms = 0;
+    g_wink_start_ms = now;
+    hold_ms = kWinkTotalMs + kFadeHalfMs + 40U;
+  }
   g_emotion_expiry_ms = now + hold_ms;
 }
 

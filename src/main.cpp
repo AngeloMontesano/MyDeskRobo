@@ -23,7 +23,9 @@ static volatile bool g_ble_ready = false;
 static uint32_t g_last_motion_poll_ms = 0;
 static uint32_t g_last_shake_event_ms = 0;
 static uint32_t g_motion_boot_grace_until_ms = 0;
-static uint8_t g_shake_hits = 0;
+static uint32_t g_burst_start_ms = 0;   // when current motion burst began
+static uint8_t  g_calm_streak = 0;      // consecutive calm polls since last sample
+static uint8_t  g_burst_hits = 0;       // shake_sample=true count in current burst
 static bool g_motion_seeded = false;
 static float g_prev_ax = 0.0f;
 static float g_prev_ay = 0.0f;
@@ -65,16 +67,33 @@ static void GyroMotionLoop() {
   g_prev_az = az;
 
   if (shake_sample) {
-    if (g_shake_hits < 3) g_shake_hits++;
+    g_calm_streak = 0;
+    if (g_burst_start_ms == 0) { g_burst_start_ms = now; g_burst_hits = 0; }
+    g_burst_hits++;
   } else {
-    g_shake_hits = 0;
-  }
-
-  if (g_shake_hits >= 2 && (now - g_last_shake_event_ms) > 2600U) {
-    g_last_shake_event_ms = now;
-    g_shake_hits = 0;
-    DeskRobo_PushEvent(DESKROBO_EVENT_MOTION_SHAKE);
-    Serial.printf("[GYRO] SHAKE ax=%.2f ay=%.2f az=%.2f gx=%.2f gy=%.2f gz=%.2f\n", ax, ay, az, gx, gy, gz);
+    if (g_burst_start_ms > 0) {
+      g_calm_streak++;
+      if (g_calm_streak >= 3) {  // 3×40 ms = 120 ms quiet → burst ended
+        const uint32_t burst_ms = now - g_burst_start_ms;
+        // TAP: few hits (sharp knock + some ringing) — not a sustained shake
+        // SHAKE: many hits spread over time
+        const bool is_tap   = (g_burst_hits <= 6) && (now - g_last_shake_event_ms) > 600U;
+        const bool is_shake = (g_burst_hits >  6) && (burst_ms >= 500U) && (now - g_last_shake_event_ms) > 2600U;
+        Serial.printf("[GYRO] burst=%ums hits=%u → %s\n",
+                      (unsigned)burst_ms, (unsigned)g_burst_hits,
+                      is_tap ? "TAP" : is_shake ? "SHAKE" : "ignore");
+        if (is_tap) {
+          g_last_shake_event_ms = now;
+          DeskRobo_PushEvent(DESKROBO_EVENT_MOTION_TAP);
+        } else if (is_shake) {
+          g_last_shake_event_ms = now;
+          DeskRobo_PushEvent(DESKROBO_EVENT_MOTION_SHAKE);
+        }
+        g_burst_start_ms = 0;
+        g_calm_streak = 0;
+        g_burst_hits = 0;
+      }
+    }
   }
 #endif
 }

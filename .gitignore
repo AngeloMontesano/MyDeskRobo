@@ -84,3 +84,9 @@ pc_agent/*.spec.bak
 
 # Local scene exports
 *.renderer_spec.json
+
+# Eye designer tool
+docs/eye_designer/
+
+# Face renderer engine
+MyDeskRoboEngine/

@@ -188,6 +188,10 @@ class AgentApp:
         self.state_var = tk.StringVar(value="Nicht gestartet")
         self.detail_var = tk.StringVar(value="Der Agent verbindet sich nach dem Start automatisch per BLE.")
 
+        self._demo_active = False
+        self._demo_index = 0
+        self._demo_after_id = None
+
         self.emotion_var = tk.StringVar(value="IDLE")
         self.emotion_hold_var = tk.StringVar(value="3500")
         self.backlight_var = tk.IntVar(value=65)
@@ -273,6 +277,16 @@ class AgentApp:
         ttk.Button(look, text="Jetzt zeigen", command=self._on_set_emotion).grid(row=1, column=4, sticky="w", padx=(12, 0), pady=(10, 0))
         self._emotions_source_label = ttk.Label(look, text="(Emotionen: Standardliste)", foreground="#888888", font=("Segoe UI", 8))
         self._emotions_source_label.grid(row=2, column=0, columnspan=5, sticky="w", pady=(4, 0))
+
+        demo = ttk.LabelFrame(parent, text="Demo-Modus", padding=10)
+        demo.pack(fill=tk.X, pady=(0, 8))
+        ttk.Label(demo, text="Alle Emotionen nacheinander anzeigen (5 s, GLITCH 8 s).").grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 6))
+        self._demo_start_btn = ttk.Button(demo, text="▶  Demo starten", command=self._demo_start)
+        self._demo_start_btn.grid(row=1, column=0, sticky="w")
+        self._demo_stop_btn = ttk.Button(demo, text="■  Demo stoppen", command=self._demo_stop, state="disabled")
+        self._demo_stop_btn.grid(row=1, column=1, sticky="w", padx=(8, 0))
+        self._demo_status_var = tk.StringVar(value="")
+        ttk.Label(demo, textvariable=self._demo_status_var, foreground="#2a7a2a").grid(row=1, column=2, sticky="w", padx=(16, 0))
 
         eyes = ttk.LabelFrame(parent, text="Linkes / rechtes Auge", padding=10)
         eyes.pack(fill=tk.X, pady=(0, 8))
@@ -493,6 +507,48 @@ class AgentApp:
     def _on_refresh_emotions(self) -> None:
         if self._send("list_emotions"):
             self._append_log("Emotionsliste vom Geraet angefragt...")
+
+    # ------------------------------------------------------------------ demo mode
+
+    def _demo_start(self) -> None:
+        if self._demo_active:
+            return
+        self._demo_active = True
+        self._demo_index = 0
+        self._demo_start_btn.configure(state="disabled")
+        self._demo_stop_btn.configure(state="normal")
+        self._append_log("Demo-Modus gestartet.")
+        self._demo_step()
+
+    def _demo_stop(self) -> None:
+        self._demo_active = False
+        if self._demo_after_id is not None:
+            self.root.after_cancel(self._demo_after_id)
+            self._demo_after_id = None
+        self._demo_status_var.set("")
+        self._demo_start_btn.configure(state="normal")
+        self._demo_stop_btn.configure(state="disabled")
+        self._append_log("Demo-Modus gestoppt.")
+
+    def _demo_step(self) -> None:
+        if not self._demo_active:
+            return
+        emotions = self._available_emotions
+        if not emotions:
+            self._demo_stop()
+            return
+        if self._demo_index >= len(emotions):
+            self._demo_stop()
+            self._append_log("Demo-Modus abgeschlossen.")
+            return
+        emo = emotions[self._demo_index]
+        is_glitch = emo.upper() == "GLITCH"
+        hold_ms = 8000 if is_glitch else 5000
+        self._send("emotion", emo, hold_ms)
+        self._demo_status_var.set(f"{self._demo_index + 1}/{len(emotions)}: {emo}")
+        self._append_log(f"Demo: {emo} ({hold_ms} ms)")
+        self._demo_index += 1
+        self._demo_after_id = self.root.after(hold_ms, self._demo_step)
 
     # ------------------------------------------------------------------ mapping tab handlers
 
@@ -834,6 +890,7 @@ class AgentApp:
         self.root.after(200, self._poll_events)
 
     def _on_close(self) -> None:
+        self._demo_stop()
         if self.controller.is_running():
             self.controller.stop()
         self.root.after(150, self.root.destroy)
