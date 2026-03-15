@@ -78,7 +78,6 @@ logs/
 # Local agent / release artifacts
 # ----------------------------
 pc_agent/build/
-pc_agent/dist/
 pc_agent/*.spec.bak
 *.bak
 
