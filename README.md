@@ -1,7 +1,7 @@
 # MyDeskRobo
 
 MyDeskRobo is an ESP32-S3 desk companion for the Waveshare ESP32-S3-LCD-1.85 (round display, 360×360, no touch).
-The firmware renders animated eyes on the display and reacts to audio, motion (IMU) and BLE commands from a Windows PC agent.
+The firmware renders animated eyes on the display and reacts to motion (IMU) and BLE commands from a Windows PC agent.
 
 ## Demo
 
