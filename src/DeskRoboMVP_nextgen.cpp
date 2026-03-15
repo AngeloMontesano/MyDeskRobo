@@ -38,7 +38,7 @@ struct NextgenTuning {
   int blink_interval_ms = 3600;
   int blink_duration_ms = 120;
   int double_blink_chance_pct = 20;
-  int glow_pulse_amp = 6;
+  int glow_pulse_amp = 9;
   int glow_pulse_period_ms = 2600;
   int shake_amp_px = 24;
   int shake_period_ms = 700;
@@ -66,6 +66,24 @@ struct GlitchFxState {
   int16_t scan_h[4] = {0, 0, 0, 0};
 };
 
+struct SaccadeState {
+  int16_t target_x = 0;
+  int16_t target_y = 0;
+  uint32_t hold_until_ms = 0;
+};
+
+struct GazeState {
+  int16_t target_x = 0;
+  int16_t target_y = 0;
+  uint32_t hold_until_ms = 0;
+  uint32_t next_gaze_ms = 0;
+};
+
+// Gaze directions: left/right + 4 diagonals only.
+// Pure up/down removed — doesn't read well on this tall ellipse eye shape.
+static const int8_t kGazeDirX[] = { 1, -1,  1,  1, -1, -1};
+static const int8_t kGazeDirY[] = { 0,  0, -1,  1,  1, -1};
+
 LayerRenderer *g_left_renderer = nullptr;
 LayerRenderer *g_right_renderer = nullptr;
 lv_obj_t *g_left_canvas = nullptr;
@@ -80,6 +98,11 @@ uint32_t g_boot_splash_started_ms = 0;
 Preferences g_prefs;
 NextgenTuning g_tuning;
 GlitchFxState g_glitch_fx;
+SaccadeState g_saccade;
+GazeState g_gaze;
+uint32_t g_next_blink_interval_ms = 3600;
+uint32_t g_next_rr_interval_ms = 15000;
+uint32_t g_micro_expr_next_ms = 0;
 
 DeskRoboEmotion g_current_emotion = DESKROBO_EMOTION_IDLE;
 DeskRoboEmotion g_left_eye_emotion = DESKROBO_EMOTION_IDLE;
@@ -110,20 +133,23 @@ static constexpr uint8_t kScreensaverDimPct = 35;
 static constexpr uint32_t kBootSplashMs = 2800UL;
 static constexpr const char *kBootBrand = "My Robo Desk";
 static constexpr const char *kBootVersion = "v0.5";
-static constexpr DeskRoboEmotion kIdleRound[] = {
+// Mutable shuffled idle sequence. GLITCH is always immediately followed by CONFUSED.
+static constexpr uint8_t kIdleRoundLen = 9;
+static DeskRoboEmotion g_idle_round[kIdleRoundLen] = {
     DESKROBO_EMOTION_HAPPY,
     DESKROBO_EMOTION_SAD,
     DESKROBO_EMOTION_ANGRY,
     DESKROBO_EMOTION_WOW,
     DESKROBO_EMOTION_SLEEPY,
-    DESKROBO_EMOTION_CONFUSED,
     DESKROBO_EMOTION_WINK,
     DESKROBO_EMOTION_XX,
     DESKROBO_EMOTION_GLITCH,
+    DESKROBO_EMOTION_CONFUSED,
 };
 
 void reset_blink_state();
 void reset_glitch_fx();
+void shuffle_idle_round();
 
 const char *emotion_name(DeskRoboEmotion emotion) {
   switch (emotion) {
@@ -254,6 +280,43 @@ void reset_glitch_fx() {
   g_glitch_fx = GlitchFxState{};
 }
 
+void shuffle_idle_round() {
+  // Base pool: all emotions except GLITCH and CONFUSED (those are a fixed pair)
+  DeskRoboEmotion base[] = {
+      DESKROBO_EMOTION_HAPPY,
+      DESKROBO_EMOTION_SAD,
+      DESKROBO_EMOTION_ANGRY,
+      DESKROBO_EMOTION_WOW,
+      DESKROBO_EMOTION_SLEEPY,
+      DESKROBO_EMOTION_WINK,
+      DESKROBO_EMOTION_XX,
+  };
+  const uint8_t base_len = 7;
+
+  // Fisher-Yates shuffle of base pool
+  for (uint8_t i = base_len - 1; i > 0; --i) {
+    const uint8_t j = (uint8_t)random(i + 1);
+    const DeskRoboEmotion tmp = base[i];
+    base[i] = base[j];
+    base[j] = tmp;
+  }
+
+  // Insert GLITCH+CONFUSED pair at a random position
+  const uint8_t insert_pos = (uint8_t)random(base_len + 1);
+  uint8_t out = 0;
+  for (uint8_t i = 0; i < base_len; ++i) {
+    if (i == insert_pos) {
+      g_idle_round[out++] = DESKROBO_EMOTION_GLITCH;
+      g_idle_round[out++] = DESKROBO_EMOTION_CONFUSED;
+    }
+    g_idle_round[out++] = base[i];
+  }
+  if (insert_pos == base_len) {
+    g_idle_round[out++] = DESKROBO_EMOTION_GLITCH;
+    g_idle_round[out++] = DESKROBO_EMOTION_CONFUSED;
+  }
+}
+
 int16_t wave_value(uint32_t now_ms, uint16_t period_ms, int16_t amplitude, bool use_cos) {
   if (period_ms == 0 || amplitude == 0) return 0;
   const float phase = (float)(now_ms % period_ms) / (float)period_ms;
@@ -264,12 +327,15 @@ int16_t wave_value(uint32_t now_ms, uint16_t period_ms, int16_t amplitude, bool 
 
 RuntimeState make_runtime_state(const EyeSceneSpec &scene, lv_color_t color, bool include_glitch) {
   const uint32_t now = millis();
-  if (!g_blink_active && (now - g_last_blink_toggle_ms) > (uint32_t)g_tuning.blink_interval_ms) {
+  if (!g_blink_active && (now - g_last_blink_toggle_ms) > g_next_blink_interval_ms) {
     g_blink_active = true;
     g_last_blink_toggle_ms = now;
   } else if (g_blink_active && (now - g_last_blink_toggle_ms) > (uint32_t)g_tuning.blink_duration_ms) {
     g_blink_active = false;
     g_last_blink_toggle_ms = now;
+    // Jitter: ±20% around blink_interval_ms so blinks don't feel mechanical
+    const int32_t jitter = (int32_t)random(-(g_tuning.blink_interval_ms / 5), g_tuning.blink_interval_ms / 5 + 1);
+    g_next_blink_interval_ms = (uint32_t)max(600, g_tuning.blink_interval_ms + jitter);
     if (!g_double_blink_pending && random(100) < g_tuning.double_blink_chance_pct) {
       g_double_blink_pending = true;
     } else {
@@ -291,20 +357,61 @@ RuntimeState make_runtime_state(const EyeSceneSpec &scene, lv_color_t color, boo
   int16_t saccade_amp = g_tuning.saccade_amp_px;
   uint16_t drift_x_period = 950;
   uint16_t drift_y_period = 1200;
-  uint16_t saccade_x_period = (uint16_t)g_tuning.saccade_min_ms;
-  uint16_t saccade_y_period = (uint16_t)g_tuning.saccade_max_ms;
+
+  // Sleepy transition: gradually slow animation as device approaches sleep
+  {
+    const uint32_t idle_ms = now - g_last_interaction_ms;
+    const uint32_t sleep_ms = (uint32_t)g_tuning.sleep_delay_min * 60000UL;
+    const uint32_t onset_ms = sleep_ms * 6 / 10;
+    if (!g_ble_connected && sleep_ms > 0 && idle_ms > onset_ms) {
+      const float t = (float)(idle_ms - onset_ms) / (float)(sleep_ms - onset_ms);
+      const float f = 1.0f - (t > 1.0f ? 1.0f : t) * 0.65f;
+      drift_amp  = (int16_t)((float)drift_amp  * f);
+      saccade_amp = (int16_t)((float)saccade_amp * f);
+      drift_x_period = (uint16_t)(drift_x_period  * (1.0f + (1.0f - f)));
+      drift_y_period = (uint16_t)(drift_y_period  * (1.0f + (1.0f - f)));
+    }
+  }
+
   if (strcmp(scene.name, "eve_shake") == 0) {
     drift_amp = max(6, g_tuning.shake_amp_px / 2);
     saccade_amp = 0;
     drift_x_period = (uint16_t)max(360, g_tuning.shake_period_ms + 80);
     drift_y_period = (uint16_t)max(460, g_tuning.shake_period_ms + 180);
-    saccade_x_period = 0;
-    saccade_y_period = 0;
   }
   state.drift_x = wave_value(now, drift_x_period, drift_amp, false);
   state.drift_y = wave_value(now, drift_y_period, drift_amp / 2, true);
-  state.saccade_x = wave_value(now, saccade_x_period, saccade_amp, false);
-  state.saccade_y = wave_value(now, saccade_y_period, saccade_amp / 2, true);
+
+  if (saccade_amp > 0) {
+    if (now >= g_saccade.hold_until_ms) {
+      g_saccade.target_x = (int16_t)random(-saccade_amp, saccade_amp + 1);
+      g_saccade.target_y = (int16_t)random(-(saccade_amp / 2), (saccade_amp / 2) + 1);
+      g_saccade.hold_until_ms = now + (uint32_t)random(g_tuning.saccade_min_ms, g_tuning.saccade_max_ms + 1);
+    }
+    // Gaze: occasionally look clearly in one of 6 directions
+    if (now >= g_gaze.next_gaze_ms && now >= g_gaze.hold_until_ms) {
+      const uint8_t pick = (uint8_t)random(6);
+      g_gaze.target_x = (int16_t)(kGazeDirX[pick] * 11);
+      g_gaze.target_y = (int16_t)(kGazeDirY[pick] * 7);
+      g_gaze.hold_until_ms = now + (uint32_t)random(1200, 2800);
+      g_gaze.next_gaze_ms = g_gaze.hold_until_ms + (uint32_t)random(7000, 18000);
+      // Blink just before shifting gaze, like real eyes do
+      if (!g_blink_active) {
+        g_blink_active = true;
+        g_last_blink_toggle_ms = now;
+      }
+    }
+    if (now < g_gaze.hold_until_ms) {
+      state.saccade_x = g_gaze.target_x;
+      state.saccade_y = g_gaze.target_y;
+    } else {
+      state.saccade_x = g_saccade.target_x;
+      state.saccade_y = g_saccade.target_y;
+    }
+  } else {
+    state.saccade_x = 0;
+    state.saccade_y = 0;
+  }
   if (g_tuning.glow_pulse_period_ms > 0) {
     const float phase = (float)(now % (uint32_t)g_tuning.glow_pulse_period_ms) / (float)g_tuning.glow_pulse_period_ms;
     state.pulse_shift = (int8_t)(sinf(phase * 6.2831853f) * (float)g_tuning.glow_pulse_amp);
@@ -358,7 +465,7 @@ void update_glitch_fx(const EyeSceneSpec &scene) {
     g_glitch_fx.scan_count = (uint8_t)random(3, 5);
     for (uint8_t i = 0; i < g_glitch_fx.scan_count && i < 4; ++i) {
       g_glitch_fx.scan_y[i] = (int16_t)random(30, 330);
-      g_glitch_fx.scan_h[i] = (int16_t)random(1, 3);
+      g_glitch_fx.scan_h[i] = (int16_t)random(3, 7);
     }
   }
 
@@ -419,16 +526,55 @@ void apply_sleep_policy() {
   }
 }
 
+void maybe_micro_expression() {
+  if (g_eye_pair_active || g_current_priority > 0 || g_boot_splash) return;
+  const uint32_t now = millis();
+  if ((now - g_last_interaction_ms) < kIdleRoundRobinAfterMs) return;
+  if (now < g_micro_expr_next_ms) return;
+  static const DeskRoboEmotion kMicroPool[] = {
+      DESKROBO_EMOTION_HAPPY,
+      DESKROBO_EMOTION_CONFUSED,
+      DESKROBO_EMOTION_ANGRY_SOFT,
+      DESKROBO_EMOTION_WOW,
+  };
+  const uint8_t pick = (uint8_t)random(sizeof(kMicroPool) / sizeof(kMicroPool[0]));
+  g_current_emotion = kMicroPool[pick];
+  g_current_priority = 3;
+  g_emotion_expiry_ms = now + (uint32_t)random(280, 560);
+  g_micro_expr_next_ms = now + (uint32_t)random(120000UL, 300000UL);
+}
+
+void apply_pre_sleep_emotion() {
+  if (g_ble_connected || wifi_session_active()) return;
+  if (g_current_priority > 2 || g_boot_splash) return;
+  const uint32_t now = millis();
+  const uint32_t idle_ms = now - g_last_interaction_ms;
+  const uint32_t sleep_ms = (uint32_t)g_tuning.sleep_delay_min * 60000UL;
+  if (sleep_ms == 0 || idle_ms < sleep_ms * 6 / 10) return;
+  g_current_emotion = DESKROBO_EMOTION_SLEEPY;
+  g_current_priority = 2;
+  g_emotion_expiry_ms = now + 5000;
+}
+
 void maybe_idle_round_robin() {
   const uint32_t now = millis();
   if (g_eye_pair_active || g_current_priority > 0) return;
   if ((now - g_last_interaction_ms) < kIdleRoundRobinAfterMs) return;
-  if ((now - g_last_idle_round_ms) < kIdleRoundRobinIntervalMs) return;
+  if ((now - g_last_idle_round_ms) < g_next_rr_interval_ms) return;
   g_last_idle_round_ms = now;
-  g_idle_round_index = (uint8_t)((g_idle_round_index + 1) % (sizeof(kIdleRound) / sizeof(kIdleRound[0])));
-  g_current_emotion = kIdleRound[g_idle_round_index];
+  g_idle_round_index = (uint8_t)(g_idle_round_index + 1);
+  if (g_idle_round_index >= kIdleRoundLen) {
+    g_idle_round_index = 0;
+    shuffle_idle_round();
+  }
+  const DeskRoboEmotion rr_emotion = g_idle_round[g_idle_round_index];
+  const uint32_t rr_show_ms = (rr_emotion == DESKROBO_EMOTION_WINK)
+      ? (uint32_t)random(400, 650)
+      : kIdleRoundRobinShowMs;
+  g_current_emotion = rr_emotion;
   g_current_priority = kIdleRoundRobinPriority;
-  g_emotion_expiry_ms = now + kIdleRoundRobinShowMs;
+  g_emotion_expiry_ms = now + rr_show_ms;
+  g_next_rr_interval_ms = (uint32_t)random(10000, 22000);
 }
 
 void maybe_expire_states() {
@@ -669,7 +815,12 @@ void DeskRobo_Init() {
   randomSeed(micros());
   create_ui();
   load_prefs_values();
+  // Start at last index so the first maybe_idle_round_robin call wraps,
+  // shuffles, and begins at [0] — ensuring all positions are covered.
+  g_idle_round_index = kIdleRoundLen - 1;
   g_last_interaction_ms = millis();
+  g_gaze.next_gaze_ms = g_last_interaction_ms + 6000;
+  g_micro_expr_next_ms = g_last_interaction_ms + 180000UL;
   g_boot_splash_started_ms = g_last_interaction_ms;
   reset_blink_state();
   reset_glitch_fx();
@@ -678,6 +829,8 @@ void DeskRobo_Init() {
 
 void DeskRobo_Loop() {
   maybe_expire_states();
+  apply_pre_sleep_emotion();
+  maybe_micro_expression();
   maybe_idle_round_robin();
   apply_sleep_policy();
   update_status_label();
