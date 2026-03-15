@@ -97,4 +97,5 @@ python -m py_compile pc_agent\pc_agent.py pc_agent\agent_gui.py pc_agent\ble_cli
 
 ## License
 
-Add a `LICENSE` file before publishing publicly.
+This project is licensed under the MIT License.
+See [LICENSE](LICENSE) for the full text.
