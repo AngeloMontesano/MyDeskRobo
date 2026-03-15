@@ -3,6 +3,14 @@
 MyDeskRobo is an ESP32-S3 desk companion for the Waveshare ESP32-S3-LCD-1.85 (round display, 360×360, no touch).
 The firmware renders animated eyes on the display and reacts to audio, motion (IMU) and BLE commands from a Windows PC agent.
 
+## Origin
+
+The 3D printed body is from **Deskimon** by CreativeChance:
+[thangs.com — Deskimon: Cute Robots For Your Desk](https://thangs.com/designer/CreativeChance/post/Deskimon%20-%20Cute%20Robots%20For%20Your%20Desk-252349)
+
+I didn't read the instructions properly and bought the wrong display.
+So I scaled the body to 104% to fit the Waveshare ESP32-S3-LCD-1.85, wrote all the emotions and firmware myself (with AI assistance), and ended up with MyDeskRobo.
+
 ## Current Release Scope
 
 Included:
