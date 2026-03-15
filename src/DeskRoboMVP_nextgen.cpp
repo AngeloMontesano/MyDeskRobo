@@ -25,6 +25,9 @@
 #include "scenes/eve_dizzy.h"
 #include "scenes/eve_excited.h"
 #include "scenes/eve_glitch.h"
+#include "scenes/eve_skeptical.h"
+#include "scenes/eve_bored.h"
+#include "scenes/eve_focused.h"
 
 using namespace nse;
 
@@ -134,7 +137,7 @@ static constexpr uint32_t kBootSplashMs = 2800UL;
 static constexpr const char *kBootBrand = "My Robo Desk";
 static constexpr const char *kBootVersion = "v0.5";
 // Mutable shuffled idle sequence. GLITCH is always immediately followed by CONFUSED.
-static constexpr uint8_t kIdleRoundLen = 9;
+static constexpr uint8_t kIdleRoundLen = 12;
 static DeskRoboEmotion g_idle_round[kIdleRoundLen] = {
     DESKROBO_EMOTION_HAPPY,
     DESKROBO_EMOTION_SAD,
@@ -143,6 +146,9 @@ static DeskRoboEmotion g_idle_round[kIdleRoundLen] = {
     DESKROBO_EMOTION_SLEEPY,
     DESKROBO_EMOTION_WINK,
     DESKROBO_EMOTION_XX,
+    DESKROBO_EMOTION_SKEPTICAL,
+    DESKROBO_EMOTION_BORED,
+    DESKROBO_EMOTION_FOCUSED,
     DESKROBO_EMOTION_GLITCH,
     DESKROBO_EMOTION_CONFUSED,
 };
@@ -169,6 +175,9 @@ const char *emotion_name(DeskRoboEmotion emotion) {
     case DESKROBO_EMOTION_WINK: return "WINK";
     case DESKROBO_EMOTION_XX: return "XX";
     case DESKROBO_EMOTION_GLITCH: return "GLITCH";
+    case DESKROBO_EMOTION_SKEPTICAL: return "SKEPTICAL";
+    case DESKROBO_EMOTION_BORED: return "BORED";
+    case DESKROBO_EMOTION_FOCUSED: return "FOCUSED";
     default: return "IDLE";
   }
 }
@@ -218,6 +227,9 @@ const EyeSceneSpec &scene_for_emotion(DeskRoboEmotion emotion, DeskRoboFaceStyle
     case DESKROBO_EMOTION_WINK: return kEveWinkScene;
     case DESKROBO_EMOTION_XX: return kEveXXScene;
     case DESKROBO_EMOTION_GLITCH: return kEveGlitchScene;
+    case DESKROBO_EMOTION_SKEPTICAL: return kEveSkepticalScene;
+    case DESKROBO_EMOTION_BORED: return kEveBoredScene;
+    case DESKROBO_EMOTION_FOCUSED: return kEveFocusedScene;
     case DESKROBO_EMOTION_IDLE:
     default:
       return kEveIdleScene;
@@ -290,8 +302,11 @@ void shuffle_idle_round() {
       DESKROBO_EMOTION_SLEEPY,
       DESKROBO_EMOTION_WINK,
       DESKROBO_EMOTION_XX,
+      DESKROBO_EMOTION_SKEPTICAL,
+      DESKROBO_EMOTION_BORED,
+      DESKROBO_EMOTION_FOCUSED,
   };
-  const uint8_t base_len = 7;
+  const uint8_t base_len = 10;
 
   // Fisher-Yates shuffle of base pool
   for (uint8_t i = base_len - 1; i > 0; --i) {
@@ -335,7 +350,8 @@ RuntimeState make_runtime_state(const EyeSceneSpec &scene, lv_color_t color, boo
     g_last_blink_toggle_ms = now;
     // Jitter: ±20% around blink_interval_ms so blinks don't feel mechanical
     const int32_t jitter = (int32_t)random(-(g_tuning.blink_interval_ms / 5), g_tuning.blink_interval_ms / 5 + 1);
-    g_next_blink_interval_ms = (uint32_t)max(600, g_tuning.blink_interval_ms + jitter);
+    const int32_t next_blink = g_tuning.blink_interval_ms + jitter;
+    g_next_blink_interval_ms = (uint32_t)(next_blink < 600 ? 600 : next_blink);
     if (!g_double_blink_pending && random(100) < g_tuning.double_blink_chance_pct) {
       g_double_blink_pending = true;
     } else {
@@ -388,11 +404,17 @@ RuntimeState make_runtime_state(const EyeSceneSpec &scene, lv_color_t color, boo
       g_saccade.target_y = (int16_t)random(-(saccade_amp / 2), (saccade_amp / 2) + 1);
       g_saccade.hold_until_ms = now + (uint32_t)random(g_tuning.saccade_min_ms, g_tuning.saccade_max_ms + 1);
     }
-    // Gaze: occasionally look clearly in one of 6 directions
+    // Gaze: occasionally look clearly in one of 6 directions.
+    // CONFUSED Denkpose: 70% chance to look upper-left (classic thinking gaze).
     if (now >= g_gaze.next_gaze_ms && now >= g_gaze.hold_until_ms) {
-      const uint8_t pick = (uint8_t)random(6);
-      g_gaze.target_x = (int16_t)(kGazeDirX[pick] * 11);
-      g_gaze.target_y = (int16_t)(kGazeDirY[pick] * 7);
+      if (strcmp(scene.name, "eve_confused") == 0 && random(10) < 7) {
+        g_gaze.target_x = (int16_t)(kGazeDirX[5] * 11); // upper-left
+        g_gaze.target_y = (int16_t)(kGazeDirY[5] * 7);
+      } else {
+        const uint8_t pick = (uint8_t)random(6);
+        g_gaze.target_x = (int16_t)(kGazeDirX[pick] * 11);
+        g_gaze.target_y = (int16_t)(kGazeDirY[pick] * 7);
+      }
       g_gaze.hold_until_ms = now + (uint32_t)random(1200, 2800);
       g_gaze.next_gaze_ms = g_gaze.hold_until_ms + (uint32_t)random(7000, 18000);
       // Blink just before shifting gaze, like real eyes do
@@ -465,7 +487,7 @@ void update_glitch_fx(const EyeSceneSpec &scene) {
     g_glitch_fx.scan_count = (uint8_t)random(3, 5);
     for (uint8_t i = 0; i < g_glitch_fx.scan_count && i < 4; ++i) {
       g_glitch_fx.scan_y[i] = (int16_t)random(30, 330);
-      g_glitch_fx.scan_h[i] = (int16_t)random(3, 7);
+      g_glitch_fx.scan_h[i] = (int16_t)random(4, 10);
     }
   }
 
@@ -652,11 +674,10 @@ void create_ui() {
   lv_label_set_text(g_confused_label, "??");
   lv_obj_set_style_text_color(g_confused_label, lv_color_make(0x0F, 0xDA, 0xFF), 0);
   lv_obj_set_style_text_opa(g_confused_label, LV_OPA_COVER, 0);
-  lv_obj_set_style_text_font(g_confused_label, &lv_font_montserrat_16, 0);
-  lv_obj_set_style_transform_zoom(g_confused_label, 360, 0);
+  lv_obj_set_style_text_font(g_confused_label, &lv_font_montserrat_20, 0);
   lv_obj_set_style_bg_opa(g_confused_label, LV_OPA_TRANSP, 0);
   lv_obj_add_flag(g_confused_label, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_set_pos(g_confused_label, 250, 28);
+  lv_obj_set_pos(g_confused_label, 248, 24);
 
   g_boot_splash = lv_obj_create(lv_scr_act());
   lv_obj_remove_style_all(g_boot_splash);

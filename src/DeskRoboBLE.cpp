@@ -102,6 +102,9 @@ bool parseEmotion(const String &name, DeskRoboEmotion &out) {
   else if (name == "WINK") out = DESKROBO_EMOTION_WINK;
   else if (name == "XX") out = DESKROBO_EMOTION_XX;
   else if (name == "GLITCH") out = DESKROBO_EMOTION_GLITCH;
+  else if (name == "SKEPTICAL") out = DESKROBO_EMOTION_SKEPTICAL;
+  else if (name == "BORED") out = DESKROBO_EMOTION_BORED;
+  else if (name == "FOCUSED") out = DESKROBO_EMOTION_FOCUSED;
   else if (name.startsWith("ANGRY_")) out = DESKROBO_EMOTION_ANGRY;
   else if (name.startsWith("SAD_")) out = DESKROBO_EMOTION_SAD;
   else return false;
